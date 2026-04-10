@@ -999,7 +999,7 @@ class YardimDropDown(ui.Select):
             discord.SelectOption(label="🛡️ Moderasyon", description="Ban, Kick, Mute, Unmute, Nuke..."),
             discord.SelectOption(label="🎭 Rol Yönetimi", description="Rol Ver, Rol Al, Toplu Rol..."),
             discord.SelectOption(label="🎬 Roleplay", description="Kayıt, Değer, Antrenman komutları."),
-            discord.SelectOption(label="📢 APEX KAP", description="Transfer, Kiralama, Yenileme, Fesih"),
+            discord.SelectOption(label="📢 NOVA KAP", description="Transfer, Kiralama, Yenileme, Fesih"),
             discord.SelectOption(label="💰 Nova Money", description="Ekonomi ve para sistemi komutları."),
             discord.SelectOption(label="🌍 Genel & Eğlence", description="Ping, Avatar, Snipe, AFK...")
         ]
@@ -1014,7 +1014,7 @@ class YardimDropDown(ui.Select):
             embed.description = "**`.rolver @üye [rol]`** - Role verir.\n**`.rolal @üye [rol]`** - Rolü alır.\n**`.toplurolver @üye/hepsi [roller]`** - Toplu rol verir.\n**`.toplurolal @üye/hepsi [roller]`** - Toplu rol alır."
         elif self.values[0] == "🎬 Roleplay":
             embed.description = "**`.k @üye [İsim | Değer | Takım]`** - Kayıt yapar.\n**`.dver @üye [miktar] [sebep]`** - Kişiye değer ekler.\n**`.dsil @üye [miktar] [sebep]`** - Kişiden değer siler.\n**`.antrenman`** - Antrenman yapar, 10/10 olunca +3M verir."
-        elif self.values[0] == "📢 APEX KAP":
+        elif self.values[0] == "📢 NOVA KAP":
             embed.description = "`.kap` komutu ile panel açılır.\nTransfer ve Kiralama 2 aşamalıdır."
         elif self.values[0] == "💰 Nova Money":
             embed.description = "**`.nm`** - Bakiyenizi gösterir.\n**`.nmsend @üye <miktar>`** - Başkasına para gönderir.\n**`.nmadd @üye <miktar>`** - Bot Commander para ekler.\n**`.nmremove @üye <miktar>`** - Bot Commander para siler."
@@ -1027,7 +1027,7 @@ class YardimDropDown(ui.Select):
 async def yardım(ctx):
     view = ui.View()
     view.add_item(YardimDropDown())
-    embed = discord.Embed(title="APEX PLUS | YARDIM MENÜSÜ", description="Aşağıdaki menüden kategori seçin.", color=0x2f3136)
+    embed = discord.Embed(title="NOVA | YARDIM MENÜSÜ", description="Aşağıdaki menüden kategori seçin.", color=0x2f3136)
     await ctx.send(embed=embed, view=view)
 
 
