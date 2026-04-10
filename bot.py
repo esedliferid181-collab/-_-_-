@@ -9,7 +9,7 @@ import os
 
 # --- AYARLAR ---
 TOKEN = os.environ.get("DISCORD_TOKEN")  # Tokeni koddan çıkardık, Railway'den çekecek
-KAP_KANAL_ID = 1479830443858853918
+KAP_KANAL_ID = 1489650264389587004
 PREFIX = "."
 
 intents = discord.Intents.all()
