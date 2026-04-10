@@ -131,7 +131,7 @@ async def on_member_join(member):
         return
     
     embed = discord.Embed(
-        title="LALIGA OLANLARI NOVA et",
+        title="NOVA",
         description=f"**{member.mention}** sunucuya katıldı!\n\nAşağıdaki **ÜSTLEN** butonuna basarak bu üyenin kaydını yapabilirsin.",
         color=0xFF6B00,
         timestamp=datetime.datetime.now()
