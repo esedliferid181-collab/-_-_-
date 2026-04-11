@@ -8,7 +8,7 @@ import os
 
 # --- AYARLAR ---
 TOKEN = os.environ.get("DISCORD_TOKEN")
-KAP_KANAL_ID = 1489650264389587004
+KAP_KANAL_ID = 1479830443858853918
 KAYIT_KANAL_ID = 1479825240401117296  # KAYIT KANALI ID'Sİ BURAYA YAZILACAK
 PREFIX = "."
 
@@ -18,7 +18,7 @@ bot = commands.Bot(command_prefix=PREFIX, intents=intents, help_command=None)
 # ====================== ROLEPLAY AYARLARI ======================
 KAYIT_YETKILI_ROL_ID = 1479820024658137221
 DEGER_YETKILI_ROL_ID = 1479819855182954506
-DEGER_LOG_KANAL_ID = 1488467755370811482
+DEGER_LOG_KANAL_ID = 1479829702821548243
 ANTRENMAN_KANAL_ID = 1489650216398356614
 ROL_YETKILI_ROL_ID = 1480224190752620636  # ROL VERME/ALMA YETKİLİSİ ROL ID BURAYA YAZILACAK
 
@@ -27,6 +27,26 @@ KAYITSIZ_ROL = "Kayıtsız"
 ROL_UYE = "Üye"
 ROL_FUTBOLCU = "Futbolcu"
 ROL_TAKIM_BASKANI = "Takım Başkanı"
+
+# ====================== TAKIM ROL ID'LERİ ======================
+TAKIM_ROLLERI = {
+    "FC Barcelona": 1479835203668148325,          # FC Barcelona ROL ID BURAYA
+    "Real Madrid CF": 1479835100693663955,        # Real Madrid CF ROL ID BURAYA
+    "ATLETİCO MADRİD": 1479835299319255172,      # ATLETİCO MADRİD ROL ID BURAYA
+    "LİVERPOOL": 1479835413286752367,             # LİVERPOOL ROL ID BURAYA
+    "MANCHESTER CİTY": 1479835961742589963,       # MANCHESTER CİTY ROL ID BURAYA
+    "MANCHESTER UNİTED": 1479836203397288088,     # MANCHESTER UNİTED ROL ID BURAYA
+    "BAYERN MÜNİH": 1479838152691814534,          # BAYERN MÜNİH ROL ID BURAYA
+    "GALATASARAY": 1479838753676857546,           # GALATASARAY ROL ID BURAYA
+    "FENERBAHÇE": 1479838832580104263,            # FENERBAHÇE ROL ID BURAYA
+    "BEŞİKTAŞ": 1479840026622955621,              # BEŞİKTAŞ ROL ID BURAYA
+    "DORTMUND": 1480442890042736793,              # DORTMUND ROL ID BURAYA
+    "PSG": 1480443652852682752,                   # PSG ROL ID BURAYA
+    "JUVENTUS": 1480442964848414801,              # JUVENTUS ROL ID BURAYA
+    "AC MİLAN": 1480443773493448807,              # AC MİLAN ROL ID BURAYA
+    "İNTER": 1480443987302289530,                 # İNTER ROL ID BURAYA
+    "LYON": 1480444106999205959,                  # LYON ROL ID BURAYA
+}
 # ================================================================
 
 # Veri Saklama Alanları
@@ -35,7 +55,6 @@ afk_kullanicilar = {}
 kap_bellek = {}
 kayit_sayaci = {}
 antrenman_sayac = {}
-ustelen_bellek = {}  # Üstlenme sistemi için
 
 
 @bot.event
@@ -76,9 +95,9 @@ async def on_message(message):
             sebep = afk_kullanicilar[mention.id]
             await message.channel.send(f"⚠️ {mention.name} şu an AFK durumda! \n📝 Sebep: **{sebep}**")
 
-    selam_kelimeleri = ["sa", "selamın aleyküm", "selaminaleykum", "selamünaleyküm", "selamunaleykum", "s.a", "s.a.", "sa "]
-    mesaj_kucuk = message.content.lower().strip()
-    if mesaj_kucuk in selam_kelimeleri or mesaj_kucuk.startswith(tuple(selam_kelimeleri)):
+    # SA KARŞILAMA - SADECE "sa" veya "Sa" yazanlara
+    mesaj = message.content.strip()
+    if mesaj in ["sa", "Sa"]:
         await message.channel.send(f"{message.author.mention} **Aleykümselam, hoş geldin!**")
 
     await bot.process_commands(message)
@@ -87,17 +106,15 @@ async def on_message(message):
 # ====================== ÜYE GİRİŞ EVENTİ ======================
 class UstelenView(discord.ui.View):
     def __init__(self, uye: discord.Member):
-        super().__init__(timeout=600)  # 10 dakika (600 saniye)
+        super().__init__(timeout=600)
         self.uye = uye
         self.kilitli_kisi = None
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        # Eğer kimse üstlenmediyse herkes basabilir
         if self.kilitli_kisi is None:
             self.kilitli_kisi = interaction.user.id
             return True
         
-        # 10 dakika geçtiyse kilidi aç
         if interaction.user.id != self.kilitli_kisi:
             await interaction.response.send_message("❌ Bu üyeyi şu an başkası kaydediyor, 10 dakika sonra tekrar deneyin!", ephemeral=True)
             return False
@@ -105,12 +122,10 @@ class UstelenView(discord.ui.View):
 
     @discord.ui.button(label="ÜSTLEN", style=discord.ButtonStyle.success, emoji="✅")
     async def ustlen_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-        # Yetkili kontrolü
         if not kayit_yetkisi_var_mi(interaction.user):
             await interaction.response.send_message("❌ Bu butonu kullanmak için **Kayıt Yetkilisi** rolüne sahip olmalısın!", ephemeral=True)
             return
         
-        # Butonu disable et
         button.disabled = True
         button.label = f"{interaction.user.display_name} üstlendi"
         
@@ -119,6 +134,10 @@ class UstelenView(discord.ui.View):
         embed.color = 0x2ECC71
         
         await interaction.response.edit_message(embed=embed, view=self)
+
+    async def on_timeout(self):
+        for item in self.children:
+            item.disabled = True
 
 
 @bot.event
@@ -130,9 +149,22 @@ async def on_member_join(member):
     if not kanal:
         return
     
+    # Kayıt yetkilisi rolünü bul
+    kayit_yetkili_rol = None
+    for guild in bot.guilds:
+        kayit_yetkili_rol = guild.get_role(KAYIT_YETKILI_ROL_ID)
+        if kayit_yetkili_rol:
+            break
+    
+    # Etiket metni oluştur
+    if kayit_yetkili_rol:
+        etiket = f"{kayit_yetkili_rol.mention}\n\n"
+    else:
+        etiket = ""
+    
     embed = discord.Embed(
-        title="NOVA",
-        description=f"**{member.mention}** sunucuya katıldı!\n\nAşağıdaki **ÜSTLEN** butonuna basarak bu üyenin kaydını yapabilirsin.",
+        title="LALIGA OLANLARI NOVA et",
+        description=f"{etiket}**{member.mention}** sunucuya katıldı!\n\nAşağıdaki **ÜSTLEN** butonuna basarak bu üyenin kaydını yapabilirsin.",
         color=0xFF6B00,
         timestamp=datetime.datetime.now()
     )
@@ -143,11 +175,6 @@ async def on_member_join(member):
     
     view = UstelenView(member)
     await kanal.send(embed=embed, view=view)
-
-
-async def on_timeout(self):
-    for item in self.children:
-        item.disabled = True
 
 
 # ====================== MODERASYON KOMUTLARI ======================
@@ -255,12 +282,10 @@ async def nuke(ctx):
 
 # ====================== ROL YETKİSİ KONTROL FONKSİYONU ======================
 def rol_yetkisi_var_mi(kisi):
-    """Rol verme/alma yetkisi kontrolü"""
     if kisi.guild_permissions.administrator:
         return True
     if ROL_YETKILI_ROL_ID != 0:
         return any(rol.id == ROL_YETKILI_ROL_ID for rol in kisi.roles)
-    # Eğer özel rol ID belirtilmemişse manage_roles yetkisi kontrol et
     return kisi.guild_permissions.manage_roles
 
 
@@ -768,19 +793,41 @@ def boslari_x(deger):
     return deger.strip() if deger and deger.strip() else "x"
 
 
-async def rol_islemi(member: discord.Member, eski_takim: str, yeni_takim: str = None):
-    try:
-        if eski_takim and eski_takim.lower() != "x":
-            eski_rol = discord.utils.get(member.guild.roles, name=eski_takim)
-            if eski_rol and eski_rol in member.roles:
-                await member.remove_roles(eski_rol)
+def takim_kontrol(takim_adi):
+    """Takım adı listede var mı kontrol et"""
+    for listedeki in TAKIM_ROLLERI.keys():
+        if takim_adi.upper() == listedeki.upper():
+            return listedeki
+    return None
 
+
+async def kap_rol_islemi(member: discord.Member, eski_takim: str, yeni_takim: str = None):
+    """KAP sisteminde sadece tanımlı takımların rolünü verir"""
+    try:
+        # Eski takım rolü kontrol
+        if eski_takim and eski_takim.lower() != "x":
+            eski_adi = takim_kontrol(eski_takim)
+            if eski_adi:
+                eski_rol_id = TAKIM_ROLLERI[eski_adi]
+                eski_rol = member.guild.get_role(eski_rol_id)
+                if eski_rol and eski_rol in member.roles:
+                    await member.remove_roles(eski_rol)
+
+        # Yeni takım rolü kontrol
         if yeni_takim and yeni_takim.lower() != "x":
-            yeni_rol = discord.utils.get(member.guild.roles, name=yeni_takim)
-            if yeni_rol and yeni_rol not in member.roles:
-                await member.add_roles(yeni_rol)
+            yeni_adi = takim_kontrol(yeni_takim)
+            if yeni_adi:
+                yeni_rol_id = TAKIM_ROLLERI[yeni_adi]
+                yeni_rol = member.guild.get_role(yeni_rol_id)
+                if yeni_rol and yeni_rol not in member.roles:
+                    await member.add_roles(yeni_rol)
+            else:
+                # Geçersiz takım adı - hata döndür
+                return False, yeni_takim
     except:
         pass
+    
+    return True, None
 
 
 class TransferDevamView(ui.View):
@@ -798,11 +845,17 @@ class TransferDevamView(ui.View):
 class TransferBirinci(ui.Modal, title="📌 TRANSFER (1/2)"):
     oid = ui.TextInput(label="Oyuncu Discord ID", min_length=17, max_length=20)
     oyuncu_ismi = ui.TextInput(label="Oyuncu İsmi")
-    eski_takim = ui.TextInput(label="Eski Takımı")
+    eski_takim = ui.TextInput(label="Eski Takımı", placeholder="Örn: GALATASARAY")
     bonservis = ui.TextInput(label="Bonservis Bedeli")
     yillik_maas = ui.TextInput(label="Yıllık Maaş")
     
     async def on_submit(self, interaction: discord.Interaction):
+        # Eski takım kontrolü
+        eski = self.eski_takim.value.strip()
+        if eski.lower() != "x" and not takim_kontrol(eski):
+            await interaction.response.send_message(f"❌ **{eski}** geçersiz bir takım adı!\n\n📋 Geçerli takımlar:\n" + "\n".join([f"• {t}" for t in TAKIM_ROLLERI.keys()]), ephemeral=True)
+            return
+        
         kap_bellek[interaction.user.id] = {
             "oid": self.oid.value,
             "oyuncu": self.oyuncu_ismi.value,
@@ -817,7 +870,7 @@ class TransferIkinci(ui.Modal, title="📌 TRANSFER (2/2)"):
     def __init__(self, data1):
         super().__init__()
         self.data1 = data1
-        self.yeni_takim = ui.TextInput(label="Yeni Takımı")
+        self.yeni_takim = ui.TextInput(label="Yeni Takımı", placeholder="Örn: FENERBAHÇE")
         self.sozlesme_suresi = ui.TextInput(label="Sözleşme Süresi")
         self.bitis_sezonu = ui.TextInput(label="Sözleşme Bitiş Sezonu")
         self.fesh_tazminati = ui.TextInput(label="Tek Taraflı Fesh Tazminatı")
@@ -827,6 +880,11 @@ class TransferIkinci(ui.Modal, title="📌 TRANSFER (2/2)"):
             self.add_item(item)
 
     async def on_submit(self, interaction: discord.Interaction):
+        # Yeni takım kontrolü
+        yeni = self.yeni_takim.value.strip()
+        if yeni.lower() != "x" and not takim_kontrol(yeni):
+            await interaction.response.send_message(f"❌ **{yeni}** geçersiz bir takım adı!\n\n📋 Geçerli takımlar:\n" + "\n".join([f"• {t}" for t in TAKIM_ROLLERI.keys()]), ephemeral=True)
+            return
         await gonder_transfer(interaction, self)
 
 
@@ -839,7 +897,12 @@ async def gonder_transfer(interaction, modal):
         member = await interaction.guild.fetch_member(int(modal.data1["oid"]))
         eski = boslari_x(modal.data1["eski"])
         yeni = boslari_x(modal.yeni_takim.value)
-        await rol_islemi(member, eski, yeni)
+        
+        # Takım rolü işlemi
+        basarili, hatali_takim = await kap_rol_islemi(member, eski, yeni)
+        if not basarili:
+            await interaction.response.send_message(f"❌ **{hatali_takim}** geçersiz bir takım! Rol verilmedi.", ephemeral=True)
+            return
 
         embed = discord.Embed(title="**TRANSFER KAP AÇIKLAMASI**", color=0x3498db, timestamp=datetime.datetime.now())
         embed.set_thumbnail(url=member.display_avatar.url)
@@ -878,11 +941,17 @@ class KiralikDevamView(ui.View):
 class KiralikBirinci(ui.Modal, title="📌 KİRALIK (1/2)"):
     oid = ui.TextInput(label="Oyuncu Discord ID", min_length=17, max_length=20)
     oyuncu_ismi = ui.TextInput(label="Oyuncu İsmi")
-    eski_takim = ui.TextInput(label="Eski Takımı")
+    eski_takim = ui.TextInput(label="Eski Takımı", placeholder="Örn: GALATASARAY")
     kiralama_bedeli = ui.TextInput(label="Kiralama Bedeli")
     yillik_maas = ui.TextInput(label="Yıllık Maaş ve Ödeyicisi", placeholder="Örn: 5M / Galatasaray")
     
     async def on_submit(self, interaction: discord.Interaction):
+        # Eski takım kontrolü
+        eski = self.eski_takim.value.strip()
+        if eski.lower() != "x" and not takim_kontrol(eski):
+            await interaction.response.send_message(f"❌ **{eski}** geçersiz bir takım adı!\n\n📋 Geçerli takımlar:\n" + "\n".join([f"• {t}" for t in TAKIM_ROLLERI.keys()]), ephemeral=True)
+            return
+        
         kap_bellek[interaction.user.id] = {
             "oid": self.oid.value,
             "oyuncu": self.oyuncu_ismi.value,
@@ -897,7 +966,7 @@ class KiralikIkinci(ui.Modal, title="📌 KİRALIK (2/2)"):
     def __init__(self, data1):
         super().__init__()
         self.data1 = data1
-        self.yeni_takim = ui.TextInput(label="Yeni Takımı")
+        self.yeni_takim = ui.TextInput(label="Yeni Takımı", placeholder="Örn: FENERBAHÇE")
         self.imza_primi = ui.TextInput(label="İmza Primi")
         self.sure_ve_bitis = ui.TextInput(label="Sözleşme Süresi ve Bitiş Sezonu", placeholder="Örn: 2 Yıl / 2026")
         self.geri_cagirma = ui.TextInput(label="Geri Çağırma Bedeli")
@@ -906,6 +975,11 @@ class KiralikIkinci(ui.Modal, title="📌 KİRALIK (2/2)"):
             self.add_item(item)
 
     async def on_submit(self, interaction: discord.Interaction):
+        # Yeni takım kontrolü
+        yeni = self.yeni_takim.value.strip()
+        if yeni.lower() != "x" and not takim_kontrol(yeni):
+            await interaction.response.send_message(f"❌ **{yeni}** geçersiz bir takım adı!\n\n📋 Geçerli takımlar:\n" + "\n".join([f"• {t}" for t in TAKIM_ROLLERI.keys()]), ephemeral=True)
+            return
         await gonder_kiralik(interaction, self)
 
 
@@ -918,7 +992,12 @@ async def gonder_kiralik(interaction, modal):
         member = await interaction.guild.fetch_member(int(modal.data1["oid"]))
         eski = boslari_x(modal.data1["eski"])
         yeni = boslari_x(modal.yeni_takim.value)
-        await rol_islemi(member, eski, yeni)
+        
+        # Takım rolü işlemi
+        basarili, hatali_takim = await kap_rol_islemi(member, eski, yeni)
+        if not basarili:
+            await interaction.response.send_message(f"❌ **{hatali_takim}** geçersiz bir takım! Rol verilmedi.", ephemeral=True)
+            return
 
         maas_parcalari = [p.strip() for p in modal.data1["yillik_maas"].split("/")]
         maas = maas_parcalari[0] if len(maas_parcalari) > 0 else "?"
@@ -956,12 +1035,18 @@ class YenilemeModal(ui.Modal, title="✍️ SÖZLEŞME YENİLEME"):
     oyuncu_ismi = ui.TextInput(label="Oyuncu İsmi")
     eski_maas = ui.TextInput(label="Eski Yıllık Maaşı")
     yeni_maas = ui.TextInput(label="Yeni Yıllık Maaşı")
-    takim = ui.TextInput(label="Takım")
+    takim = ui.TextInput(label="Takım", placeholder="Örn: GALATASARAY")
     
     async def on_submit(self, interaction: discord.Interaction):
         try:
+            # Takım kontrolü
+            takim_adi = self.takim.value.strip()
+            if takim_adi.lower() != "x" and not takim_kontrol(takim_adi):
+                await interaction.response.send_message(f"❌ **{takim_adi}** geçersiz bir takım adı!\n\n📋 Geçerli takımlar:\n" + "\n".join([f"• {t}" for t in TAKIM_ROLLERI.keys()]), ephemeral=True)
+                return
+            
             member = await interaction.guild.fetch_member(int(self.oid.value))
-            await rol_islemi(member, boslari_x(self.takim.value))
+            await kap_rol_islemi(member, boslari_x(self.takim.value))
 
             embed = discord.Embed(title="**SÖZLEŞME YENİLEME KAP AÇIKLAMASI**", color=0x2ecc71, timestamp=datetime.datetime.now())
             embed.set_thumbnail(url=member.display_avatar.url)
@@ -984,13 +1069,19 @@ class FesihModal(ui.Modal, title="🚫 SÖZLEŞME FESİH"):
     oid = ui.TextInput(label="Oyuncu Discord ID", min_length=17, max_length=20)
     oyuncu_ismi = ui.TextInput(label="Oyuncu İsmi")
     fesh_bedeli = ui.TextInput(label="Fesh Bedeli")
-    eski_takim = ui.TextInput(label="Eski Takım")
+    eski_takim = ui.TextInput(label="Eski Takım", placeholder="Örn: GALATASARAY")
     fesh_sebebi = ui.TextInput(label="Fesh Sebebi", style=discord.TextStyle.paragraph)
     
     async def on_submit(self, interaction: discord.Interaction):
         try:
+            # Takım kontrolü
+            takim_adi = self.eski_takim.value.strip()
+            if takim_adi.lower() != "x" and not takim_kontrol(takim_adi):
+                await interaction.response.send_message(f"❌ **{takim_adi}** geçersiz bir takım adı!\n\n📋 Geçerli takımlar:\n" + "\n".join([f"• {t}" for t in TAKIM_ROLLERI.keys()]), ephemeral=True)
+                return
+            
             member = await interaction.guild.fetch_member(int(self.oid.value))
-            await rol_islemi(member, boslari_x(self.eski_takim.value))
+            await kap_rol_islemi(member, boslari_x(self.eski_takim.value))
 
             embed = discord.Embed(title="**FESİH KAP AÇIKLAMASI**", color=0xe74c3c, timestamp=datetime.datetime.now())
             embed.set_thumbnail(url=member.display_avatar.url)
@@ -1032,7 +1123,12 @@ class KAPPaneli(ui.View):
 
 @bot.command()
 async def kap(ctx):
-    embed = discord.Embed(title="📣 NOVA PLUS | KAP YÖNETİM PANELİ", description="Aşağıdan istediğiniz işlemi seçin:\n*(Transfer ve Kiralama işlemleri 2 aşamalıdır)*", color=0x2f3136)
+    takim_listesi = "\n".join([f"• {t}" for t in TAKIM_ROLLERI.keys()])
+    embed = discord.Embed(
+        title="📣 NOVA PLUS | KAP YÖNETİM PANELİ", 
+        description=f"Aşağıdan istediğiniz işlemi seçin:\n*(Transfer ve Kiralama işlemleri 2 aşamalıdır)*\n\n📋 **Geçerli Takımlar:**\n{takim_listesi}", 
+        color=0x2f3136
+    )
     await ctx.send(embed=embed, view=KAPPaneli())
 
 
@@ -1061,7 +1157,8 @@ class YardimDropDown(ui.Select):
             embed.description = "**`.k @üye [İsim | Değer | Takım]`** - Kayıt yapar.\n**`.dver @üye [miktar] [sebep]`** - Kişiye değer ekler.\n**`.dsil @üye [miktar] [sebep]`** - Kişiden değer siler.\n**`.antrenman`** - Antrenman yapar, 10/10 olunca +3M verir."
             
         elif self.values[0] == "📢 NOVA KAP":
-            embed.description = "`.kap` komutu ile panel açılır.\nTransfer ve Kiralama 2 aşamalıdır."
+            takim_listesi = "\n".join([f"• {t}" for t in TAKIM_ROLLERI.keys()])
+            embed.description = f"`.kap` komutu ile panel açılır.\nTransfer ve Kiralama 2 aşamalıdır.\n\n📋 **Sadece şu takımların rolü verilebilir:**\n{takim_listesi}"
             
         elif self.values[0] == "🌍 Genel & Eğlence":
             embed.description = "**`.ping`** - Bot gecikmesini gösterir.\n**`.avatar @üye`** - Profil fotoğrafını gösterir.\n**`.snipe`** - Silinen son mesajı gösterir.\n**`.afk [sebep]`** - AFK moduna geçer.\n**`.ship @üye`** - Uyumu ölçer.\n**`.roll [seçenek1, seçenek2]`** - Şanslı seçim."
