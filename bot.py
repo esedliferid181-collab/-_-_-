@@ -9,7 +9,7 @@ import os
 # --- AYARLAR ---
 TOKEN = os.environ.get("DISCORD_TOKEN")
 KAP_KANAL_ID = 1479830443858853918
-KAYIT_KANAL_ID = 1479825240401117296  # KAYIT KANALI ID'Sİ BURAYA YAZILACAK
+KAYIT_KANAL_ID = 1479825240401117296
 PREFIX = "."
 
 intents = discord.Intents.all()
@@ -20,7 +20,7 @@ KAYIT_YETKILI_ROL_ID = 1479820024658137221
 DEGER_YETKILI_ROL_ID = 1479819855182954506
 DEGER_LOG_KANAL_ID = 1479829702821548243
 ANTRENMAN_KANAL_ID = 1489650216398356614
-ROL_YETKILI_ROL_ID = 1480224190752620636  # ROL VERME/ALMA YETKİLİSİ ROL ID BURAYA YAZILACAK
+ROL_YETKILI_ROL_ID = 1480224190752620636
 
 KAYITLI_ROL = "Kayıtlı"
 KAYITSIZ_ROL = "Kayıtsız"
@@ -30,22 +30,22 @@ ROL_TAKIM_BASKANI = "Takım Başkanı"
 
 # ====================== TAKIM ROL ID'LERİ ======================
 TAKIM_ROLLERI = {
-    "FC Barcelona": 1479835203668148325,          # FC Barcelona ROL ID BURAYA
-    "Real Madrid CF": 1479835100693663955,        # Real Madrid CF ROL ID BURAYA
-    "ATLETİCO MADRİD": 1479835299319255172,      # ATLETİCO MADRİD ROL ID BURAYA
-    "LİVERPOOL": 1479835413286752367,             # LİVERPOOL ROL ID BURAYA
-    "MANCHESTER CİTY": 1479835961742589963,       # MANCHESTER CİTY ROL ID BURAYA
-    "MANCHESTER UNİTED": 1479836203397288088,     # MANCHESTER UNİTED ROL ID BURAYA
-    "BAYERN MÜNİH": 1479838152691814534,          # BAYERN MÜNİH ROL ID BURAYA
-    "GALATASARAY": 1479838753676857546,           # GALATASARAY ROL ID BURAYA
-    "FENERBAHÇE": 1479838832580104263,            # FENERBAHÇE ROL ID BURAYA
-    "BEŞİKTAŞ": 1479840026622955621,              # BEŞİKTAŞ ROL ID BURAYA
-    "DORTMUND": 1480442890042736793,              # DORTMUND ROL ID BURAYA
-    "PSG": 1480443652852682752,                   # PSG ROL ID BURAYA
-    "JUVENTUS": 1480442964848414801,              # JUVENTUS ROL ID BURAYA
-    "AC MİLAN": 1480443773493448807,              # AC MİLAN ROL ID BURAYA
-    "İNTER": 1480443987302289530,                 # İNTER ROL ID BURAYA
-    "LYON": 1480444106999205959,                  # LYON ROL ID BURAYA
+    "FC Barcelona": 1479835203668148325,
+    "Real Madrid CF": 1479835100693663955,
+    "ATLETİCO MADRİD": 1479835299319255172,
+    "LİVERPOOL": 1479835413286752367,
+    "MANCHESTER CİTY": 1479835961742589963,
+    "MANCHESTER UNİTED": 1479836203397288088,
+    "BAYERN MÜNİH": 1479838152691814534,
+    "GALATASARAY": 1479838753676857546,
+    "FENERBAHÇE": 1479838832580104263,
+    "BEŞİKTAŞ": 1479840026622955621,
+    "DORTMUND": 1480442890042736793,
+    "PSG": 1480443652852682752,
+    "JUVENTUS": 1480442964848414801,
+    "AC MİLAN": 1480443773493448807,
+    "İNTER": 1480443987302289530,
+    "LYON": 1480444106999205959,
 }
 # ================================================================
 
@@ -95,7 +95,6 @@ async def on_message(message):
             sebep = afk_kullanicilar[mention.id]
             await message.channel.send(f"⚠️ {mention.name} şu an AFK durumda! \n📝 Sebep: **{sebep}**")
 
-    # SA KARŞILAMA - SADECE "sa" veya "Sa" yazanlara
     mesaj = message.content.strip()
     if mesaj in ["sa", "Sa"]:
         await message.channel.send(f"{message.author.mention} **Aleykümselam, hoş geldin!**")
@@ -149,22 +148,19 @@ async def on_member_join(member):
     if not kanal:
         return
     
-    # Kayıt yetkilisi rolünü bul
-    kayit_yetkili_rol = None
-    for guild in bot.guilds:
-        kayit_yetkili_rol = guild.get_role(KAYIT_YETKILI_ROL_ID)
-        if kayit_yetkili_rol:
-            break
+    kayit_yetkili_rol = member.guild.get_role(KAYIT_YETKILI_ROL_ID)
     
-    # Etiket metni oluştur
+    # EMBED DIŞINDA, EN ÜSTTE ETİKET AT (TAG GELMESİ İÇİN)
     if kayit_yetkili_rol:
-        etiket = f"{kayit_yetkili_rol.mention}\n\n"
-    else:
-        etiket = ""
+        try:
+            await kanal.send(f"⚠️ **Yeni Üye Katıldı!** {kayit_yetkili_rol.mention}")
+        except:
+            pass # Rol pingable ayarlı değilse hata vermemek için
     
+    # EMBEDİN İÇİNE ETİKET YOK, SADECE NOVA VE BİLGİLER VAR
     embed = discord.Embed(
-        title="LALIGA OLANLARI NOVA et",
-        description=f"{etiket}**{member.mention}** sunucuya katıldı!\n\nAşağıdaki **ÜSTLEN** butonuna basarak bu üyenin kaydını yapabilirsin.",
+        title="NOVA",
+        description=f"**{member.mention}** sunucuya katıldı!\n\nAşağıdaki **ÜSTLEN** butonuna basarak bu üyenin kaydını yapabilirsin.",
         color=0xFF6B00,
         timestamp=datetime.datetime.now()
     )
@@ -579,7 +575,13 @@ async def dver(ctx, uye: discord.Member, miktar: str, *, sebep: str = "Belirtilm
     if yeni_isim is None:
         return await ctx.send(embed=hata_embed(sonuc))
         
-    await uye.edit(nick=yeni_isim)
+    # DÜZELTME: İSİM DEĞİŞTİRME HATALARI YAKALANIYOR
+    try:
+        await uye.edit(nick=yeni_isim)
+    except discord.Forbidden:
+        return await ctx.send(embed=hata_embed("❌ İsim değiştirilemedi! Botun rolü bu üyenin rolünden yüksek olmalı veya üyeyi düzenleme yetkisi olmalı."))
+    except discord.HTTPException as e:
+        return await ctx.send(embed=hata_embed(f"❌ Discord Hatası: `{e}`"))
     
     yeni_parcalar = [p.strip() for p in yeni_isim.split("|")]
     yeni_deger = yeni_parcalar[1].strip() if len(yeni_parcalar) >= 2 else "?"
@@ -604,7 +606,15 @@ async def dsil(ctx, uye: discord.Member, miktar: str = None, *, sebep: str = "Be
     if miktar is None:
         parcalar[1] = "0M"
         yeni_isim = " | ".join(parcalar)
-        await uye.edit(nick=yeni_isim)
+        
+        # DÜZELTME: İSİM DEĞİŞTİRME HATALARI YAKALANIYOR
+        try:
+            await uye.edit(nick=yeni_isim)
+        except discord.Forbidden:
+            return await ctx.send(embed=hata_embed("❌ İsim değiştirilemedi! Botun rolü bu üyenin rolünden yüksek olmalı veya üyeyi düzenleme yetkisi olmalı."))
+        except discord.HTTPException as e:
+            return await ctx.send(embed=hata_embed(f"❌ Discord Hatası: `{e}`"))
+            
         await ctx.send(embed=basari_embed(f"**{uye.mention}** değeri sıfırlandı: `{eski_deger}` → `0M`\n📝 Yeni isim: `{yeni_isim}`"))
         await log_deger_gonder(ctx.guild, ctx.author, uye, eski_deger, "0M", "🔄 Değer Sıfırlandı", sebep)
         return
@@ -613,7 +623,13 @@ async def dsil(ctx, uye: discord.Member, miktar: str = None, *, sebep: str = "Be
     if yeni_isim is None:
         return await ctx.send(embed=hata_embed(sonuc))
         
-    await uye.edit(nick=yeni_isim)
+    # DÜZELTME: İSİM DEĞİŞTİRME HATALARI YAKALANIYOR
+    try:
+        await uye.edit(nick=yeni_isim)
+    except discord.Forbidden:
+        return await ctx.send(embed=hata_embed("❌ İsim değiştirilemedi! Botun rolü bu üyenin rolünden yüksek olmalı veya üyeyi düzenleme yetkisi olmalı."))
+    except discord.HTTPException as e:
+        return await ctx.send(embed=hata_embed(f"❌ Discord Hatası: `{e}`"))
     
     yeni_parcalar = [p.strip() for p in yeni_isim.split("|")]
     yeni_deger = yeni_parcalar[1].strip() if len(yeni_parcalar) >= 2 else "?"
@@ -794,7 +810,6 @@ def boslari_x(deger):
 
 
 def takim_kontrol(takim_adi):
-    """Takım adı listede var mı kontrol et"""
     for listedeki in TAKIM_ROLLERI.keys():
         if takim_adi.upper() == listedeki.upper():
             return listedeki
@@ -802,9 +817,7 @@ def takim_kontrol(takim_adi):
 
 
 async def kap_rol_islemi(member: discord.Member, eski_takim: str, yeni_takim: str = None):
-    """KAP sisteminde sadece tanımlı takımların rolünü verir"""
     try:
-        # Eski takım rolü kontrol
         if eski_takim and eski_takim.lower() != "x":
             eski_adi = takim_kontrol(eski_takim)
             if eski_adi:
@@ -813,7 +826,6 @@ async def kap_rol_islemi(member: discord.Member, eski_takim: str, yeni_takim: st
                 if eski_rol and eski_rol in member.roles:
                     await member.remove_roles(eski_rol)
 
-        # Yeni takım rolü kontrol
         if yeni_takim and yeni_takim.lower() != "x":
             yeni_adi = takim_kontrol(yeni_takim)
             if yeni_adi:
@@ -822,7 +834,6 @@ async def kap_rol_islemi(member: discord.Member, eski_takim: str, yeni_takim: st
                 if yeni_rol and yeni_rol not in member.roles:
                     await member.add_roles(yeni_rol)
             else:
-                # Geçersiz takım adı - hata döndür
                 return False, yeni_takim
     except:
         pass
@@ -850,7 +861,6 @@ class TransferBirinci(ui.Modal, title="📌 TRANSFER (1/2)"):
     yillik_maas = ui.TextInput(label="Yıllık Maaş")
     
     async def on_submit(self, interaction: discord.Interaction):
-        # Eski takım kontrolü
         eski = self.eski_takim.value.strip()
         if eski.lower() != "x" and not takim_kontrol(eski):
             await interaction.response.send_message(f"❌ **{eski}** geçersiz bir takım adı!\n\n📋 Geçerli takımlar:\n" + "\n".join([f"• {t}" for t in TAKIM_ROLLERI.keys()]), ephemeral=True)
@@ -880,7 +890,6 @@ class TransferIkinci(ui.Modal, title="📌 TRANSFER (2/2)"):
             self.add_item(item)
 
     async def on_submit(self, interaction: discord.Interaction):
-        # Yeni takım kontrolü
         yeni = self.yeni_takim.value.strip()
         if yeni.lower() != "x" and not takim_kontrol(yeni):
             await interaction.response.send_message(f"❌ **{yeni}** geçersiz bir takım adı!\n\n📋 Geçerli takımlar:\n" + "\n".join([f"• {t}" for t in TAKIM_ROLLERI.keys()]), ephemeral=True)
@@ -898,7 +907,6 @@ async def gonder_transfer(interaction, modal):
         eski = boslari_x(modal.data1["eski"])
         yeni = boslari_x(modal.yeni_takim.value)
         
-        # Takım rolü işlemi
         basarili, hatali_takim = await kap_rol_islemi(member, eski, yeni)
         if not basarili:
             await interaction.response.send_message(f"❌ **{hatali_takim}** geçersiz bir takım! Rol verilmedi.", ephemeral=True)
@@ -946,7 +954,6 @@ class KiralikBirinci(ui.Modal, title="📌 KİRALIK (1/2)"):
     yillik_maas = ui.TextInput(label="Yıllık Maaş ve Ödeyicisi", placeholder="Örn: 5M / Galatasaray")
     
     async def on_submit(self, interaction: discord.Interaction):
-        # Eski takım kontrolü
         eski = self.eski_takim.value.strip()
         if eski.lower() != "x" and not takim_kontrol(eski):
             await interaction.response.send_message(f"❌ **{eski}** geçersiz bir takım adı!\n\n📋 Geçerli takımlar:\n" + "\n".join([f"• {t}" for t in TAKIM_ROLLERI.keys()]), ephemeral=True)
@@ -975,7 +982,6 @@ class KiralikIkinci(ui.Modal, title="📌 KİRALIK (2/2)"):
             self.add_item(item)
 
     async def on_submit(self, interaction: discord.Interaction):
-        # Yeni takım kontrolü
         yeni = self.yeni_takim.value.strip()
         if yeni.lower() != "x" and not takim_kontrol(yeni):
             await interaction.response.send_message(f"❌ **{yeni}** geçersiz bir takım adı!\n\n📋 Geçerli takımlar:\n" + "\n".join([f"• {t}" for t in TAKIM_ROLLERI.keys()]), ephemeral=True)
@@ -993,7 +999,6 @@ async def gonder_kiralik(interaction, modal):
         eski = boslari_x(modal.data1["eski"])
         yeni = boslari_x(modal.yeni_takim.value)
         
-        # Takım rolü işlemi
         basarili, hatali_takim = await kap_rol_islemi(member, eski, yeni)
         if not basarili:
             await interaction.response.send_message(f"❌ **{hatali_takim}** geçersiz bir takım! Rol verilmedi.", ephemeral=True)
@@ -1039,7 +1044,6 @@ class YenilemeModal(ui.Modal, title="✍️ SÖZLEŞME YENİLEME"):
     
     async def on_submit(self, interaction: discord.Interaction):
         try:
-            # Takım kontrolü
             takim_adi = self.takim.value.strip()
             if takim_adi.lower() != "x" and not takim_kontrol(takim_adi):
                 await interaction.response.send_message(f"❌ **{takim_adi}** geçersiz bir takım adı!\n\n📋 Geçerli takımlar:\n" + "\n".join([f"• {t}" for t in TAKIM_ROLLERI.keys()]), ephemeral=True)
@@ -1074,7 +1078,6 @@ class FesihModal(ui.Modal, title="🚫 SÖZLEŞME FESİH"):
     
     async def on_submit(self, interaction: discord.Interaction):
         try:
-            # Takım kontrolü
             takim_adi = self.eski_takim.value.strip()
             if takim_adi.lower() != "x" and not takim_kontrol(takim_adi):
                 await interaction.response.send_message(f"❌ **{takim_adi}** geçersiz bir takım adı!\n\n📋 Geçerli takımlar:\n" + "\n".join([f"• {t}" for t in TAKIM_ROLLERI.keys()]), ephemeral=True)
