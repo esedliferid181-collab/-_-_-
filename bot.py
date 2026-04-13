@@ -450,10 +450,8 @@ async def ship(ctx, member: discord.Member):
     await ctx.send(f"📊 {ctx.author.mention} ❤️ {member.mention} \n💘 Aşk Uyumu: **%{oran}** {emoji}")
 
 
-# --- YENİ KOMUT: .ARA ---
 @bot.command()
 async def ara(ctx, *, isim: str):
-    """Sunucudaki üyeleri isimden arar."""
     bulananlar = []
     aranan_kucuk = isim.lower()
     
@@ -636,53 +634,73 @@ async def dsil(ctx, uye: discord.Member, miktar: str = None, *, sebep: str = "Be
     except Exception as e: await ctx.send(embed=hata_embed(f"Hata: `{e}`"))
 
 
-# --- KAYIT KOMUTU ---
-class TakimBaskaniView(discord.ui.View):
-    def __init__(self, hedef: discord.Member, yeni_nick: str, yapan: discord.Member):
-        super().__init__(timeout=60)
+# ====================== TAKIM BASKANI - DROPDOWN SELECT (DÜZELTİLDİ) ======================
+
+class TakimSecDropdown(ui.Select):
+    """Takım başkanı kaydı için dropdown menü — dinamik buton yerine Select kullanılıyor."""
+
+    def __init__(self, hedef: discord.Member, yeni_nick: str, yapan_id: int):
         self.hedef = hedef
         self.yeni_nick = yeni_nick
-        self.yapan = yapan
-        self.kullanildi = False
+        self.yapan_id = yapan_id
 
-    async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        if interaction.user.id != self.yapan.id:
-            await interaction.response.send_message(embed=hata_embed("Bu butonları yalnızca komutu kullanan kişi kullanabilir!"), ephemeral=True)
-            return False
-        return True
+        options = [
+            discord.SelectOption(label=takim_adi, value=takim_adi)
+            for takim_adi in TAKIM_ROLLERI.keys()
+        ]
+        super().__init__(
+            placeholder="Takımı seçin...",
+            min_values=1,
+            max_values=1,
+            options=options
+        )
 
-    async def takim_secildi(self, interaction: discord.Interaction, takim_adi: str):
-        if self.kullanildi:
-            return await interaction.response.send_message(embed=hata_embed("Bu kayıt zaten yapıldı!"), ephemeral=True)
-        
-        self.kullanildi = True
+    async def callback(self, interaction: discord.Interaction):
+        # Sadece komutu kullanan kişi seçim yapabilsin
+        if interaction.user.id != self.yapan_id:
+            return await interaction.response.send_message(
+                embed=hata_embed("Bu seçimi yalnızca komutu kullanan kişi yapabilir!"),
+                ephemeral=True
+            )
+
+        takim_adi = self.values[0]
         guild = interaction.guild
         hedef = self.hedef
         yeni_nick = self.yeni_nick
 
-        kayitli_rol = discord.utils.get(guild.roles, name=KAYITLI_ROL)
+        kayitli_rol  = discord.utils.get(guild.roles, name=KAYITLI_ROL)
         kayitsiz_rol = discord.utils.get(guild.roles, name=KAYITSIZ_ROL)
-        baskan_rol = discord.utils.get(guild.roles, name=ROL_TAKIM_BASKANI)
-        takim_rol = guild.get_role(TAKIM_ROLLERI.get(takim_adi, 0))
+        baskan_rol   = discord.utils.get(guild.roles, name=ROL_TAKIM_BASKANI)
+        takim_rol    = guild.get_role(TAKIM_ROLLERI.get(takim_adi, 0))
 
-        if not takim_rol or not kayitli_rol or not baskan_rol:
-            eksik = []
-            if not takim_rol: eksik.append(takim_adi)
-            if not kayitli_rol: eksik.append(KAYITLI_ROL)
-            if not baskan_rol: eksik.append(ROL_TAKIM_BASKANI)
-            await interaction.response.edit_message(embed=hata_embed(f"Roller bulunamadı: {', '.join(eksik)}"), view=None)
-            return
+        # Eksik rol kontrolü
+        eksik = []
+        if not takim_rol:   eksik.append(takim_adi)
+        if not kayitli_rol: eksik.append(KAYITLI_ROL)
+        if not baskan_rol:  eksik.append(ROL_TAKIM_BASKANI)
+        if eksik:
+            return await interaction.response.edit_message(
+                embed=hata_embed(f"Sunucuda şu roller bulunamadı: `{'`, `'.join(eksik)}`"),
+                view=None
+            )
 
+        # Kayıtsız rolü kaldır
         if kayitsiz_rol and kayitsiz_rol in hedef.roles:
-            try: await hedef.remove_roles(kayitsiz_rol)
-            except: pass
+            try:
+                await hedef.remove_roles(kayitsiz_rol)
+            except:
+                pass
 
+        # Rolleri ver
         try:
             await hedef.add_roles(baskan_rol, kayitli_rol, takim_rol)
         except Exception as e:
-            await interaction.response.edit_message(embed=hata_embed(f"Rol verilemedi: {e}"), view=None)
-            return
+            return await interaction.response.edit_message(
+                embed=hata_embed(f"Rol verilemedi: `{e}`"),
+                view=None
+            )
 
+        # Nick güncelle
         nick_hata = None
         try:
             await hedef.edit(nick=yeni_nick)
@@ -692,37 +710,40 @@ class TakimBaskaniView(discord.ui.View):
             nick_hata = f"⚠️ Nick değiştirilemedi: {e}"
 
         renk = 0x2ECC71 if not nick_hata else 0xFFA500
-        sonuc = discord.Embed(title="✅ Başkan Kaydı Tamamlandı", color=renk, timestamp=datetime.datetime.now())
-        sonuc.add_field(name="👤 Üye", value=hedef.mention, inline=True)
-        sonuc.add_field(name="📝 Nick", value=f"`{yeni_nick}`", inline=True)
-        sonuc.add_field(name="🎭 Verilen Roller", value=f"`{ROL_TAKIM_BASKANI}`, `{KAYITLI_ROL}` ve `{takim_adi}`", inline=False)
-        
+        sonuc = discord.Embed(
+            title="✅ Başkan Kaydı Tamamlandı",
+            color=renk,
+            timestamp=datetime.datetime.now()
+        )
+        sonuc.add_field(name="👤 Üye",         value=hedef.mention,    inline=True)
+        sonuc.add_field(name="📝 Nick",         value=f"`{yeni_nick}`", inline=True)
+        sonuc.add_field(
+            name="🎭 Verilen Roller",
+            value=f"`{ROL_TAKIM_BASKANI}`, `{KAYITLI_ROL}`, `{takim_adi}`",
+            inline=False
+        )
         if nick_hata:
             sonuc.add_field(name="❗ Uyarı", value=nick_hata, inline=False)
-            
         sonuc.set_footer(text=f"Kaydeden: {interaction.user.display_name}")
+
+        # View'i kapat (dropdown'ı devre dışı bırak)
+        self.disabled = True
         await interaction.response.edit_message(embed=sonuc, view=None)
 
 
-# Takım Başkanları İçin Dinamik Buton Oluşturucu
-def olustur_takim_baskani_view(hedef: discord.Member, yeni_nick: str, yapan: discord.Member):
-    view = TakimBaskaniView(hedef=hedef, yeni_nick=yeni_nick, yapan=yapan)
-    
-    for takim_adi in TAKIM_ROLLERI.keys():
-        # Buton ismini kısaltmak için boşlukları silip maksimum 80 karakter yapıyoruz
-        btn_label = takim_adi.replace(" ", "")[:20]
-        
-        @discord.ui.button(label=btn_label, style=discord.ButtonStyle.primary, row=0 if list(TAKIM_ROLLERI.keys()).index(takim_adi) < 8 else 1)
-        async def btn_callback(self, interaction: discord.Interaction, t_adi=takim_adi):
-            await self.takim_secildi(interaction, t_adi)
-            
-        # Dinamik butonu view'a ekliyoruz
-        btn_callback.__name__ = f"takim_btn_{takim_adi.lower().replace(' ', '_')}"
-        view.add_item(btn_callback(view))
-        
-    return view
+class TakimSecView(ui.View):
+    """Takım başkanı seçim ekranı için View."""
+
+    def __init__(self, hedef: discord.Member, yeni_nick: str, yapan_id: int):
+        super().__init__(timeout=60)
+        self.add_item(TakimSecDropdown(hedef=hedef, yeni_nick=yeni_nick, yapan_id=yapan_id))
+
+    async def on_timeout(self):
+        for item in self.children:
+            item.disabled = True
 
 
+# ====================== KAYIT KOMUTU ======================
 class KayitSecimView(discord.ui.View):
     def __init__(self, hedef: discord.Member, yeni_nick: str, yapan: discord.Member):
         super().__init__(timeout=60)
@@ -733,42 +754,59 @@ class KayitSecimView(discord.ui.View):
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user.id != self.yapan.id:
-            await interaction.response.send_message(embed=hata_embed("Bu butonları yalnızca komutu kullanan kişi kullanabilir!"), ephemeral=True)
+            await interaction.response.send_message(
+                embed=hata_embed("Bu butonları yalnızca komutu kullanan kişi kullanabilir!"),
+                ephemeral=True
+            )
             return False
         return True
 
     async def kayit_yap(self, interaction: discord.Interaction, rol_adi: str):
         if self.kullanildi:
-            return await interaction.response.send_message(embed=hata_embed("Bu kayıt zaten tamamlandı!"), ephemeral=True)
+            return await interaction.response.send_message(
+                embed=hata_embed("Bu kayıt zaten tamamlandı!"), ephemeral=True
+            )
         
         self.kullanildi = True
-        guild = interaction.guild; hedef = self.hedef; yeni_nick = self.yeni_nick
+        guild = interaction.guild
+        hedef = self.hedef
+        yeni_nick = self.yeni_nick
+
         secilen_rol = discord.utils.get(guild.roles, name=rol_adi)
         kayitli_rol = discord.utils.get(guild.roles, name=KAYITLI_ROL)
         kayitsiz_rol = discord.utils.get(guild.roles, name=KAYITSIZ_ROL)
 
         if not secilen_rol or not kayitli_rol:
-            await interaction.response.edit_message(embed=hata_embed("Rol bulunamadı!"), view=None); return
+            await interaction.response.edit_message(embed=hata_embed("Rol bulunamadı!"), view=None)
+            return
 
         if kayitsiz_rol and kayitsiz_rol in hedef.roles:
-            try: await hedef.remove_roles(kayitsiz_rol)
-            except: pass
+            try:
+                await hedef.remove_roles(kayitsiz_rol)
+            except:
+                pass
 
-        try: await hedef.add_roles(secilen_rol, kayitli_rol)
+        try:
+            await hedef.add_roles(secilen_rol, kayitli_rol)
         except Exception as e:
-            await interaction.response.edit_message(embed=hata_embed(f"Rol verilemedi: {e}"), view=None); return
+            await interaction.response.edit_message(embed=hata_embed(f"Rol verilemedi: {e}"), view=None)
+            return
 
         nick_hata = None
-        try: await hedef.edit(nick=yeni_nick)
-        except discord.Forbidden: nick_hata = "⚠️ Bot bu üyeyi düzenleyemiyor."
-        except discord.HTTPException as e: nick_hata = f"⚠️ Nick değiştirilemedi: {e}"
+        try:
+            await hedef.edit(nick=yeni_nick)
+        except discord.Forbidden:
+            nick_hata = "⚠️ Bot bu üyeyi düzenleyemiyor."
+        except discord.HTTPException as e:
+            nick_hata = f"⚠️ Nick değiştirilemedi: {e}"
 
         renk = 0x2ECC71 if not nick_hata else 0xFFA500
         sonuc = discord.Embed(title="✅ Kayıt Tamamlandı", color=renk, timestamp=datetime.datetime.now())
-        sonuc.add_field(name="👤 Üye", value=hedef.mention, inline=True)
-        sonuc.add_field(name="📝 Nick", value=f"`{yeni_nick}`", inline=True)
+        sonuc.add_field(name="👤 Üye",        value=hedef.mention,    inline=True)
+        sonuc.add_field(name="📝 Nick",        value=f"`{yeni_nick}`", inline=True)
         sonuc.add_field(name="🎭 Verilen Rol", value=f"`{rol_adi}` + `{KAYITLI_ROL}`", inline=False)
-        if nick_hata: sonuc.add_field(name="❗ Uyarı", value=nick_hata, inline=False)
+        if nick_hata:
+            sonuc.add_field(name="❗ Uyarı", value=nick_hata, inline=False)
         sonuc.set_footer(text=f"Kaydeden: {interaction.user.display_name}")
         await interaction.response.edit_message(embed=sonuc, view=None)
 
@@ -783,18 +821,26 @@ class KayitSecimView(discord.ui.View):
     @discord.ui.button(label="Takım Başkanı", style=discord.ButtonStyle.danger, emoji="👑")
     async def takim_baskani_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         if self.kullanildi:
-            return await interaction.response.send_message(embed=hata_embed("Bu kayıt zaten yapıldı!"), ephemeral=True)
-        self.kullanildi = True # Ana view'ı kilitle
-        
-        # Takım seçim panelini oluştur ve mesajı güncelle
-        takim_view = olustur_takim_baskani_view(self.hedef, self.yeni_nick, self.yapan)
-        
+            return await interaction.response.send_message(
+                embed=hata_embed("Bu kayıt zaten başlatıldı!"), ephemeral=True
+            )
+        self.kullanildi = True
+
+        # Dropdown ile takım seçim ekranına geç
+        takim_view = TakimSecView(
+            hedef=self.hedef,
+            yeni_nick=self.yeni_nick,
+            yapan_id=self.yapan.id
+        )
         embed = discord.Embed(
-            title="👑 Takım Başkanı - Takım Seçin", 
-            description=f"**{self.hedef.mention}** için hangi takımın başkanı olacağını seçin.\n📝 Nick: `{self.yeni_nick}`", 
+            title="👑 Takım Başkanı — Takım Seçin",
+            description=(
+                f"**{self.hedef.mention}** için hangi takımın başkanı olacağını "
+                f"aşağıdaki menüden seçin.\n📝 Nick: `{self.yeni_nick}`"
+            ),
             color=0x5865F2
         )
-        embed.set_footer(text="Aşağıdaki takımlardan birini seçin")
+        embed.set_footer(text="Menüden bir takım seçin")
         await interaction.response.edit_message(embed=embed, view=takim_view)
 
     async def on_timeout(self):
@@ -811,7 +857,11 @@ async def kayit(ctx, uye: discord.Member, *, bilgi: str):
     if not yeni_nick:
         return await ctx.send(embed=hata_embed("Kullanım: `.k @üye L.Messi | 1M | SNT`"))
         
-    embed = discord.Embed(title="📋 Kayıt Türü Seç", description=f"**{uye.mention}** için kayıt türü seçin.\n📝 Nick: `{yeni_nick}`", color=0x5865F2)
+    embed = discord.Embed(
+        title="📋 Kayıt Türü Seç",
+        description=f"**{uye.mention}** için kayıt türü seçin.\n📝 Nick: `{yeni_nick}`",
+        color=0x5865F2
+    )
     embed.set_footer(text="Aşağıdaki butonlardan birini seçin")
     view = KayitSecimView(hedef=uye, yeni_nick=yeni_nick, yapan=ctx.author)
     await ctx.send(embed=embed, view=view)
@@ -1154,7 +1204,7 @@ class FesihModal(ui.Modal, title="🚫 SÖZLEŞME FESİH"):
                 await interaction.response.send_message(f"❌ **{takim_adi}** geçersiz bir takım adı!\n\n📋 Geçerli takımlar:\n" + "\n".join([f"• {t}" for t in TAKIM_ROLLERI.keys()]), ephemeral=True)
                 return
             
-            member = await interaction.guild.fetch_member(int(self.oid.value))
+            member = await interaction.guild.fetch_member(int(self.eski_takim.value))
             await kap_rol_islemi(member, boslari_x(self.eski_takim.value))
 
             embed = discord.Embed(title="**FESİH KAP AÇIKLAMASI**", color=0xe74c3c, timestamp=datetime.datetime.now())
