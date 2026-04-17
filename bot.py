@@ -56,6 +56,10 @@ kap_bellek = {}
 kayit_sayaci = {}
 antrenman_sayac = {}
 
+# --- YENİ EKLENEN SADECE SAHİP VE EKSTRA KOMUTLAR İÇİN VERİ ALANLARI ---
+mesaj_sayaci = {}
+snipe_all_listesi = {}
+# -----------------------------------------------------------------
 
 @bot.event
 async def on_ready():
@@ -85,6 +89,18 @@ async def on_message_delete(message):
 async def on_message(message):
     if message.author.bot:
         return
+    
+    # --- YENİ: Mesaj sayacı ve snipeall için veri tutucu ---
+    mesaj_sayaci[message.author.id] = mesaj_sayaci.get(message.author.id, 0) + 1
+    
+    kanal_id = message.channel.id
+    if kanal_id not in snipe_all_listesi:
+        snipe_all_listesi[kanal_id] = []
+    snipe_all_listesi[kanal_id].append({"yazar": message.author, "icerik": message.content, "zaman": datetime.datetime.now()})
+    
+    simdi = datetime.datetime.now()
+    snipe_all_listesi[kanal_id] = [m for m in snipe_all_listesi[kanal_id] if (simdi - m["zaman"]).total_seconds() < 300]
+    # --------------------------------------------------------
     
     if message.author.id in afk_kullanicilar:
         del afk_kullanicilar[message.author.id]
@@ -768,6 +784,11 @@ class KayitSecimView(discord.ui.View):
             )
         
         self.kullanildi = True
+        
+        # --- YENİ EKLENEN: .ytstat komutunun çalışması için kayıt sayacını artırır ---
+        kayit_sayaci[self.yapan.id] = kayit_sayaci.get(self.yapan.id, 0) + 1
+        # -------------------------------------------------------------------------------
+        
         guild = interaction.guild
         hedef = self.hedef
         yeni_nick = self.yeni_nick
@@ -1256,6 +1277,154 @@ async def kap(ctx):
     await ctx.send(embed=embed, view=KAPPaneli())
 
 
+# ====================== EKSTRİ KOMUTLAR ======================
+@bot.command()
+async def ytstat(ctx, uye: discord.Member):
+    k_sayi = kayit_sayaci.get(uye.id, 0)
+    await ctx.send(f"📊 **{uye.display_name}** İstatistikleri:\n📝 Kayıt Sayısı: `{k_sayi}`")
+
+@bot.command()
+async def m(ctx):
+    sayi = mesaj_sayaci.get(ctx.author.id, 0)
+    await ctx.send(f"📝 {ctx.author.mention} toplam **{sayi}** mesaj yazdı!")
+
+@bot.command()
+async def hesapla(ctx, *, soru: str):
+    izin_verilen = set("0123456789+-*/.() ")
+    if not all(c in izin_verilen for c in soru):
+        return await ctx.send("❌ Sadece sayılar ve matematiksel işaretler kullanabilirsin!")
+    try:
+        sonuc = eval(soru)
+        await ctx.send(f"🧮 **{soru}** = `{sonuc}`")
+    except:
+        await ctx.send("❌ Geçersiz bir matematiksel ifade!")
+
+@bot.command()
+async def owner(ctx):
+    sahibi = ctx.guild.owner
+    await ctx.send(f"👑 Sunucu Sahibi: **{sahibi.display_name}** ({sahibi.mention})")
+
+@bot.command()
+async def snipeall(ctx):
+    mesajlar = snipe_all_listesi.get(ctx.channel.id, [])
+    if not mesajlar:
+        return await ctx.send("❌ Son 5 dakikada silinen mesaj yok.")
+    
+    aciklama = ""
+    for m in reversed(mesajlar[-20:]):
+        sure = (datetime.datetime.now() - m["zaman"]).seconds
+        aciklama += f"**{m['yazar'].name}:** {m['icerik'][:80]} `({sure}sn önce)`\n"
+        
+    await ctx.send(f"🗑️ **Son 5 Dakikada Silinen Mesajlar:**\n{aciklama}")
+
+@bot.command()
+async def dmall(ctx, *, mesaj: str):
+    if ctx.author.id != ctx.guild.owner_id:
+        return await ctx.send("❌ Bu komutu sadece sunucu sahibi kullanabilir!")
+    
+    islem = await ctx.send("⏳ DM'ler gönderiliyor, lütfen bekleyin...")
+    basari = 0
+    for uye in ctx.guild.members:
+        if uye.bot or uye.id == ctx.author.id: continue
+        try:
+            await uye.send(f"📢 **{ctx.guild.name}** sunucusundan mesajınız var:\n\n{mesaj}")
+            basari += 1
+            await asyncio.sleep(0.5)
+        except:
+            continue
+    await islem.edit(content=f"✅ İşlem bitti! Toplam **{basari}** kişiye DM başarıyla gönderildi.")
+
+@bot.command()
+async def dm(ctx, uye: discord.Member, *, mesaj: str):
+    try:
+        await uye.send(f"📬 **{ctx.author.display_name}** size bir mesaj gönderdi:\n\n{mesaj}")
+        await ctx.send(f"✅ Mesajınız {uye.mention} kişisine gönderildi.")
+    except:
+        await ctx.send(f"❌ {uye.mention} kişisinin DM'i kapalı veya mesaj gönderilemedi!")
+
+@bot.command()
+async def pen(ctx):
+    secenekler = ["GOL ⚽", "KALECİ ÇIKTI 🧤", "AUT ❌"]
+    sonuc = random.choice(secenekler)
+    
+    sozler = {
+        "GOL ⚽": ["Muhteşem vuruş!", "Agırtıları salladı!", "Gol olmaz dediğin gol!"],
+        "KALECİ ÇIKTI 🧤": ["Rüya gibi kurtarış!", "Kaleci şov yaptı!", "Neyi düşünüyordun?"],
+        "AUT ❌": ["Çok az fark!", "Aut lazımdı bu maça!", "Direkten döndü, aut!"]
+    }
+    
+    soz = random.choice(sozler[sonuc])
+    renk = 0x2ECC71 if "GOL" in sonuc else (0xFFA500 if "KALECİ" in sonuc else 0xE74C3C)
+    
+    embed = discord.Embed(title=sonuc, description=f"*{soz}*", color=renk)
+    embed.set_footer(text=f"Penaltı atan: {ctx.author.name}")
+    await ctx.send(embed=embed)
+
+@bot.command()
+async def up(ctx, uye: discord.Member):
+    if ctx.author.id != ctx.guild.owner_id:
+        return await ctx.send("❌ Bu komutu sadece sunucu sahibi kullanabilir!")
+        
+    rol_siniflama = [
+        "Kayıt Yetkilisi", "Değer Yetkilisi", "Rehber", "Deneme Moderatör", 
+        "Moderatör", "Üst Moderatör", "Admin", "Üst Admin", 
+        "Sunucu Amiri", "Bot Commander", "League Commander"
+    ]
+    mevcut_roller = [r.name for r in uye.roles]
+    
+    bulunulan_index = -1
+    for i, rol_adi in enumerate(rol_siniflama):
+        if rol_adi in mevcut_roller:
+            bulunulan_index = i
+            
+    if bulunulan_index == -1:
+        hedef_rol = discord.utils.get(ctx.guild.roles, name=rol_siniflama[0])
+        if not hedef_rol: return await ctx.send("❌ Kayıt Yetkilisi rolü sunucuda bulunamadı!")
+        await uye.add_roles(hedef_rol)
+        return await ctx.send(f"⬆️ {uye.mention} adına **{hedef_rol.name}** rolü verildi!")
+        
+    if bulunulan_index >= len(rol_siniflama) - 1:
+        return await ctx.send("❌ Zaten en üst rolde (League Commander)!")
+        
+    eski_rol = discord.utils.get(ctx.guild.roles, name=rol_siniflama[bulunulan_index])
+    yeni_rol = discord.utils.get(ctx.guild.roles, name=rol_siniflama[bulunulan_index + 1])
+    
+    if not yeni_rol: return await ctx.send("❌ Bir üst rol sunucuda bulunamadı!")
+    
+    await uye.remove_roles(eski_rol)
+    await uye.add_roles(yeni_rol)
+    await ctx.send(f"⬆️ {uye.mention} rolü güncellendi: `{eski_rol.name}` -> `{yeni_rol.name}`")
+
+@bot.command()
+async def deup(ctx, uye: discord.Member):
+    if ctx.author.id != ctx.guild.owner_id:
+        return await ctx.send("❌ Bu komutu sadece sunucu sahibi kullanabilir!")
+        
+    rol_siniflama = [
+        "Kayıt Yetkilisi", "Değer Yetkilisi", "Rehber", "Deneme Moderatör", 
+        "Moderatör", "Üst Moderatör", "Admin", "Üst Admin", 
+        "Sunucu Amiri", "Bot Commander", "League Commander"
+    ]
+    mevcut_roller = [r.name for r in uye.roles]
+    
+    bulunulan_index = -1
+    for i, rol_adi in enumerate(rol_siniflama):
+        if rol_adi in mevcut_roller:
+            bulunulan_index = i
+            
+    if bulunulan_index <= 0:
+        return await ctx.send("❌ Zaten en alt rolde veya listede değil!")
+        
+    eski_rol = discord.utils.get(ctx.guild.roles, name=rol_siniflama[bulunulan_index])
+    yeni_rol = discord.utils.get(ctx.guild.roles, name=rol_siniflama[bulunulan_index - 1])
+    
+    if not eski_rol or not yeni_rol: return await ctx.send("❌ Roller bulunamadı!")
+    
+    await uye.remove_roles(eski_rol)
+    await uye.add_roles(yeni_rol)
+    await ctx.send(f"⬇️ {uye.mention} rolü güncellendi: `{eski_rol.name}` -> `{yeni_rol.name}`")
+
+
 # ====================== YARDIM SİSTEMİ ======================
 class YardimDropDown(ui.Select):
     def __init__(self):
@@ -1264,7 +1433,8 @@ class YardimDropDown(ui.Select):
             discord.SelectOption(label="🎭 Rol Yönetimi", description="Rol Ver, Rol Al, Toplu Rol..."),
             discord.SelectOption(label="🎬 Roleplay", description="Kayıt, Değer, Antrenman komutları."),
             discord.SelectOption(label="📢 NOVA KAP", description="Transfer, Kiralama, Yenileme, Fesih"),
-            discord.SelectOption(label="🌍 Genel & Eğlence", description="Ping, Avatar, Snipe, AFK...")
+            discord.SelectOption(label="🌍 Genel & Eğlence", description="Ping, Avatar, Snipe, AFK..."),
+            discord.SelectOption(label="⚡ Ekstra & Sahip", description="Up, Deup, Dmall, Hesapla, Pen...")
         ]
         super().__init__(placeholder="Kategori seçin...", options=options)
 
@@ -1285,7 +1455,10 @@ class YardimDropDown(ui.Select):
             embed.description = f"`.kap` komutu ile panel açılır.\nTransfer ve Kiralama 2 aşamalıdır.\n\n📋 **Sadece şu takımların rolü verilebilir:**\n{takim_listesi}"
             
         elif self.values[0] == "🌍 Genel & Eğlence":
-            embed.description = "**`.ping`** - Bot gecikmesini gösterir.\n**`.avatar @üye`** - Profil fotoğrafını gösterir.\n**`.snipe`** - Silinen son mesajı gösterir.\n**`.afk [sebep]`** - AFK moduna geçer.\n**`.ship @üye`** - Uyumu ölçer.\n**`.roll [seçenek1, seçenek2]`** - Şanslı seçim.\n**`.ara [isim]`** - Sunucuda isim arar."
+            embed.description = "**`.ping`** - Bot gecikmesini gösterir.\n**`.avatar @üye`** - Profil fotoğrafını gösterir.\n**`.snipe`** - Silinen son mesajı gösterir.\n**`.snipeall`** - Son 5 dk silinen tüm mesajlar.\n**`.afk [sebep]`** - AFK moduna geçer.\n**`.ship @üye`** - Uyumu ölçer.\n**`.roll [seçenek1, seçenek2]`** - Şanslı seçim.\n**`.ara [isim]`** - Sunucuda isim arar."
+            
+        elif self.values[0] == "⚡ Ekstra & Sahip":
+            embed.description = "**`.ytstat @üye`** - Yetkili kayıt sayısı.\n**`.m`** - Mesaj sayınız.\n**`.hesapla [işlem]`** - Matematiksel işlem yapar.\n**`.owner`** - Sunucu sahibini gösterir.\n**`.dmall [mesaj]`** - Herkese DM atar (Sahip).\n**`.dm @üye [mesaj]`** - Kişiye DM atar.\n**`.pen`** - Penaltı atar (Gol/Kale/Aut).\n**`.up @üye`** - Rol yükseltir (Sahip).\n**`.deup @üye`** - Rol düşürür (Sahip)."
             
         await interaction.response.edit_message(embed=embed)
 
