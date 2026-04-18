@@ -1221,7 +1221,7 @@ class YenilemeModal(ui.Modal, title="✍️ SÖZLEŞME YENİLEME"):
             await interaction.response.send_message(f"❌ Hata: `{e}`", ephemeral=True)
 
 
-class FesihModal(ui.Modal, title="🚫 SÖZLEŞME FESİH"):
+class FESHModal(ui.Modal, title="🚫 SÖZLEŞME FESİH"):
     oid = ui.TextInput(label="Oyuncu Discord ID", min_length=17, max_length=20)
     oyuncu_ismi = ui.TextInput(label="Oyuncu İsmi")
     fesh_bedeli = ui.TextInput(label="Fesh Bedeli")
@@ -1248,7 +1248,7 @@ class FesihModal(ui.Modal, title="🚫 SÖZLEŞME FESİH"):
             kanal = bot.get_channel(KAP_KANAL_ID)
             if kanal:
                 await kanal.send(embed=embed)
-                await interaction.response.send_message("✅ Fesih işlemi KAP kanalına gönderildi!", ephemeral=True)
+                await interaction.response.send_message("✅ FESH işlemi KAP kanalına gönderildi!", ephemeral=True)
             else:
                 await interaction.response.send_message("❌ KAP kanalı bulunamadı!", ephemeral=True)
         except Exception as e:
@@ -1271,9 +1271,9 @@ class KAPPaneli(ui.View):
     async def yenileme(self, interaction: discord.Interaction, button):
         await interaction.response.send_modal(YenilemeModal())
 
-    @ui.button(label="Fesih", style=discord.ButtonStyle.danger, emoji="✂️")
-    async def fesih(self, interaction: discord.Interaction, button):
-        await interaction.response.send_modal(FesihModal())
+    @ui.button(label="FESH", style=discord.ButtonStyle.danger, emoji="✂️")
+    async def FESH(self, interaction: discord.Interaction, button):
+        await interaction.response.send_modal(FESHModal())
 
 
 @bot.command()
@@ -1465,7 +1465,7 @@ class YardimDropDown(ui.Select):
             discord.SelectOption(label="🛡️ Moderasyon", description="Ban, Kick, Mute, Unmute, Nuke..."),
             discord.SelectOption(label="🎭 Rol Yönetimi", description="Rol Ver, Rol Al, Toplu Rol..."),
             discord.SelectOption(label="🎬 Roleplay", description="Kayıt, Değer, Antrenman komutları."),
-            discord.SelectOption(label="📢 NOVA KAP", description="Transfer, Kiralama, Yenileme, Fesih"),
+            discord.SelectOption(label="📢 NOVA KAP", description="Transfer, Kiralama, Yenileme, FESH"),
             discord.SelectOption(label="🌍 Genel & Eğlence", description="Ping, Avatar, Snipe, AFK..."),
             discord.SelectOption(label="⚡ Ekstra & Sahip", description="Up, Deup, Dmall, Hesapla, Pen...")
         ]
