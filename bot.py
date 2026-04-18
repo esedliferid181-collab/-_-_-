@@ -54,6 +54,7 @@ son_silinenler = {}
 afk_kullanicilar = {}
 kap_bellek = {}
 kayit_sayaci = {}
+deger_sayaci = {}  # Değer işlem sayısını tutar
 antrenman_sayac = {}
 
 # --- YENİ EKLENEN SADECE SAHİP VE EKSTRA KOMUTLAR İÇİN VERİ ALANLARI ---
@@ -619,6 +620,9 @@ async def dver(ctx, uye: discord.Member, miktar: str, *, sebep: str = "Belirtilm
         try: await uye.edit(nick=yeni_isim)
         except discord.Forbidden: return await ctx.send(embed=hata_embed("❌ İsim değiştirilemedi! Botun rolü bu üyenin rolünden yüksek olmalı."))
         except Exception as hata: return await ctx.send(embed=hata_embed(f"❌ Discord hatası: `{hata}`"))
+        
+        deger_sayaci[ctx.author.id] = deger_sayaci.get(ctx.author.id, 0) + 1 # YTSTAT İÇİN GİZLİ SAYAÇ
+        
         yeni_parcalar = yeni_isim.split("|"); yeni_deger = yeni_parcalar[1].strip() if len(yeni_parcalar) >= 2 else "?"
         await ctx.send(embed=basari_embed(f"**{uye.mention}** değeri güncellendi: {islem_detay}\n📝 Yeni isim: `{yeni_isim}`"))
         await log_deger_gonder(ctx.guild, ctx.author, uye, eski_deger, yeni_deger, "➕ Değer Eklendi", sebep)
@@ -637,6 +641,9 @@ async def dsil(ctx, uye: discord.Member, miktar: str = None, *, sebep: str = "Be
             try: await uye.edit(nick=yeni_isim)
             except discord.Forbidden: return await ctx.send(embed=hata_embed("❌ İsim değiştirilemedi! Botun rolü bu üyenin rolünden yüksek olmalı."))
             except Exception as hata: return await ctx.send(embed=hata_embed(f"❌ Discord hatası: `{hata}`"))
+            
+            deger_sayaci[ctx.author.id] = deger_sayaci.get(ctx.author.id, 0) + 1 # YTSTAT İÇİN GİZLİ SAYAÇ
+            
             await ctx.send(embed=basari_embed(f"**{uye.mention}** değeri sıfırlandı: `{eski_deger}` → `0M`\n📝 Yeni isim: `{yeni_isim}`"))
             await log_deger_gonder(ctx.guild, ctx.author, uye, eski_deger, "0M", "🔄 Değer Sıfırlandı", sebep); return
         yeni_isim, islem_detay = deger_isle(mevcut_isim, miktar, "çıkar")
@@ -644,6 +651,9 @@ async def dsil(ctx, uye: discord.Member, miktar: str = None, *, sebep: str = "Be
         try: await uye.edit(nick=yeni_isim)
         except discord.Forbidden: return await ctx.send(embed=hata_embed("❌ İsim değiştirilemedi! Botun rolü bu üyenin rolünden yüksek olmalı."))
         except Exception as hata: return await ctx.send(embed=hata_embed(f"❌ Discord hatası: `{hata}`"))
+        
+        deger_sayaci[ctx.author.id] = deger_sayaci.get(ctx.author.id, 0) + 1 # YTSTAT İÇİN GİZLİ SAYAÇ
+        
         yeni_parcalar = yeni_isim.split("|"); yeni_deger = yeni_parcalar[1].strip() if len(yeni_parcalar) >= 2 else "?"
         await ctx.send(embed=basari_embed(f"**{uye.mention}** değeri güncellendi: {islem_detay}\n📝 Yeni isim: `{yeni_isim}`"))
         await log_deger_gonder(ctx.guild, ctx.author, uye, eski_deger, yeni_deger, "➖ Değer Çıkarıldı", sebep)
@@ -785,9 +795,9 @@ class KayitSecimView(discord.ui.View):
         
         self.kullanildi = True
         
-        # --- YENİ EKLENEN: .ytstat komutunun çalışması için kayıt sayacını artırır ---
+        # --- YTSTAT KOMUTU İÇİN GİZLİ KAYIT SAYACI ---
         kayit_sayaci[self.yapan.id] = kayit_sayaci.get(self.yapan.id, 0) + 1
-        # -------------------------------------------------------------------------------
+        # ------------------------------------------------
         
         guild = interaction.guild
         hedef = self.hedef
@@ -1279,9 +1289,31 @@ async def kap(ctx):
 
 # ====================== EKSTRİ KOMUTLAR ======================
 @bot.command()
-async def ytstat(ctx, uye: discord.Member):
-    k_sayi = kayit_sayaci.get(uye.id, 0)
-    await ctx.send(f"📊 **{uye.display_name}** İstatistikleri:\n📝 Kayıt Sayısı: `{k_sayi}`")
+async def ytstat(ctx):
+    k_yetkili_rol = discord.utils.get(ctx.guild.roles, name="Kayıt Yetkilisi")
+    d_yetkili_rol = discord.utils.get(ctx.guild.roles, name="Değer Yetkilisi")
+    r_yetkili_rol = discord.utils.get(ctx.guild.roles, name="Rol Yetkili")
+    
+    yetkili_idleri = set()
+    if k_yetkili_rol: yetkili_idleri.update([m.id for m in k_yetkili_rol.members])
+    if d_yetkili_rol: yetkili_idleri.update([m.id for m in d_yetkili_rol.members])
+    if r_yetkili_rol: yetkili_idleri.update([m.id for m in r_yetkili_rol.members])
+    
+    if not yetkili_idleri:
+        return await ctx.send("❌ Sunucuda yetkili bulunamadı.")
+        
+    liste = []
+    for uid in yetkili_idleri:
+        uye = ctx.guild.get_member(uid)
+        if not uye or uye.bot: continue
+        k = kayit_sayaci.get(uid, 0)
+        d = deger_sayaci.get(uid, 0)
+        liste.append(f"**{uye.display_name}** ➔ 📝 Kayıt: `{k}` | 💰 Değer: `{d}`")
+        
+    aciklama = "\n".join(liste)
+    embed = discord.Embed(title="📊 Yetkili İstatistikleri", description=aciklama, color=0x5865F2)
+    embed.set_footer(text=f"Toplam {len(liste)} yetkili listelendi")
+    await ctx.send(embed=embed)
 
 @bot.command()
 async def m(ctx):
@@ -1362,8 +1394,9 @@ async def pen(ctx):
 
 @bot.command()
 async def up(ctx, uye: discord.Member):
-    if ctx.author.id != ctx.guild.owner_id:
-        return await ctx.send("❌ Bu komutu sadece sunucu sahibi kullanabilir!")
+    # İzin verilen ID'ler: Sunucu Sahibi VE 1290738144609828877 ID'li kişi
+    if ctx.author.id not in [ctx.guild.owner_id, 1290738144609828877]:
+        return await ctx.send("❌ Bu komutu kullanma yetkiniz yok!")
         
     rol_siniflama = [
         "Kayıt Yetkilisi", "Değer Yetkilisi", "Rehber", "Deneme Moderatör", 
@@ -1458,7 +1491,7 @@ class YardimDropDown(ui.Select):
             embed.description = "**`.ping`** - Bot gecikmesini gösterir.\n**`.avatar @üye`** - Profil fotoğrafını gösterir.\n**`.snipe`** - Silinen son mesajı gösterir.\n**`.snipeall`** - Son 5 dk silinen tüm mesajlar.\n**`.afk [sebep]`** - AFK moduna geçer.\n**`.ship @üye`** - Uyumu ölçer.\n**`.roll [seçenek1, seçenek2]`** - Şanslı seçim.\n**`.ara [isim]`** - Sunucuda isim arar."
             
         elif self.values[0] == "⚡ Ekstra & Sahip":
-            embed.description = "**`.ytstat @üye`** - Yetkili kayıt sayısı.\n**`.m`** - Mesaj sayınız.\n**`.hesapla [işlem]`** - Matematiksel işlem yapar.\n**`.owner`** - Sunucu sahibini gösterir.\n**`.dmall [mesaj]`** - Herkese DM atar (Sahip).\n**`.dm @üye [mesaj]`** - Kişiye DM atar.\n**`.pen`** - Penaltı atar (Gol/Kale/Aut).\n**`.up @üye`** - Rol yükseltir (Sahip).\n**`.deup @üye`** - Rol düşürür (Sahip)."
+            embed.description = "**`.ytstat`** - Tüm yetkililerin kayıt/değer sayıları.\n**`.m`** - Mesaj sayınız.\n**`.hesapla [işlem]`** - Matematiksel işlem yapar.\n**`.owner`** - Sunucu sahibini gösterir.\n**`.dmall [mesaj]`** - Herkese DM atar (Sahip).\n**`.dm @üye [mesaj]`** - Kişiye DM atar.\n**`.pen`** - Penaltı atar (Gol/Kale/Aut).\n**`.up @üye`** - Rol yükseltir (Sahip/Ozel).\n**`.deup @üye`** - Rol düşürür (Sahip)."
             
         await interaction.response.edit_message(embed=embed)
 
