@@ -58,6 +58,8 @@ deger_sayaci = {}
 antrenman_sayac = {}
 mesaj_sayaci = {}
 snipe_all_listesi = {}
+aktif_bilgi_oyunu = {}
+aktif_vampir_oyunu = {}
 
 @bot.event
 async def on_ready():
@@ -1177,7 +1179,7 @@ OYUNLAR = {
     },
     "🎲 Şans Çarkı": {
         "aciklama": "Bot çarkı çevirir! Çıkan sonuca göre ödül veya ceza uygulanır. Kim ne çekecek, bilinmez!",
-        "nasil": "Sırayla her kişi `.cark` yazar. Bot rastgele bir sonuç seçer. Ödül mi, ceza mı? Şansına bak!",
+        "nasil": "Sırayla her kişi `.cark` yazar. Bot rastgele bir sonuç seçer. Ödül mü, ceza mı? Şansına bak!",
         "katilimci": "Herkes",
         "sure": "Sınırsız",
         "emoji": "🎲"
@@ -1196,12 +1198,21 @@ OYUNLAR = {
         "sure": "5 dakika",
         "emoji": "🔀"
     },
+    "🧛 Vampir Köylü": {
+        "aciklama": "Klasik Vampir Köylü oyunu! 2 Vampir gizlice birini öldürür, Köylüler ise oylama ile vampiri bulmaya çalışır.",
+        "nasil": "`.vk` komutu ile başlatın ve katılın. Bot size özel rolünüzü (Vampir/Köylü) DM'den söyler. Vampirler gece DM'den hedef seçer, gündüz herkes oylama yapar.",
+        "katilimci": "5–20 kişi",
+        "sure": "15–30 dakika",
+        "emoji": "🧛"
+    },
 }
 
 CARK_SONUCLARI = [
     ("🏆 BÜYÜK ÖDÜL", "Tebrikler! Bir yetkili sana **+5M** değer ekleyecek!", "odul", 0x2ECC71),
     ("⭐ KÜÇÜK ÖDÜL", "Tebrikler! Bir yetkili sana **+1M** değer ekleyecek!", "odul", 0x27AE60),
     ("🎁 SÜRPRİZ ÖDÜL", "Yetkili istediği özel ödülü seçiyor! Ne çıkacak bilinmez...", "odul", 0xF39C12),
+    ("🧛 VAMPİR İŞARETİ", "Bir sonraki Vampir Köylü oyununda otomatik olarak **Vampir** olacaksın!", "odul", 0x8E44AD),
+    ("🛡️ KÖYLÜ KALKANI", "Bir sonraki Vampir Köylü oyununda geceleyin bir kez ölümden kurtulma hakkın var!", "odul", 0x2ECC71),
     ("😂 UTANÇ CEZASI", "5 dakika boyunca profilinde en utanç verici fotoğrafı kullanacaksın!", "ceza", 0xE67E22),
     ("💀 SUSTURMA CEZASI", "1 dakika sessize alındın! Çarkın adaleti böyle!", "ceza", 0xE74C3C),
     ("⚡ DEĞER DEĞİŞİMİ", "Yanındaki kişiyle değerlerinin yarısı el değiştirir! Yetkili uygular.", "ceza", 0x9B59B6),
@@ -1209,28 +1220,29 @@ CARK_SONUCLARI = [
     ("🌟 ŞAMPIYON UNVANI", "Bu haftalık 'Çark Şampiyonu' unvanı senin! Tebrikler!", "odul", 0xF1C40F),
     ("🎭 ROL DEĞİŞİMİ", "Bir sonraki mesajında başka bir kullanıcının adına konuşacaksın!", "notr", 0x1ABC9C),
     ("💸 DEĞERSİZ", "Bugünlük değerin sıfırlandı sayılır! (Gerçek değil, sadece roleplay!)", "ceza", 0xC0392B),
+    ("🩸 KAN KAYBI", "Vampirler seni buldu! Bir yetkili senden **-2M** değer çıkaracak!", "ceza", 0xE74C3C),
+    ("🏥 DOKTOR MÜDAHALESİ", "Tam ölecektin ama doktor yetişti! Değerin sabit kalıyor, şanslısın!", "notr", 0x3498DB),
 ]
 
 BILGI_SORULARI = [
-    ("Dünya Kupası'nı en fazla kaç kez kazanan ülke hangisidir?", "brezilya", "🇧🇷 Brezilya — 5 kez kazanmıştır!"),
-    ("Şampiyonlar Ligi'nde en fazla gol atan oyuncu kimdir?", "ronaldo", "⚽ Cristiano Ronaldo — Rekor gol sayısına sahiptir!"),
-    ("Türkiye'de en fazla şampiyonluk kazanan takım hangisidir?", "galatasaray", "🦁 Galatasaray — Rekor şampiyondur!"),
-    ("Penaltı noktası kale çizgisine kaç metre uzaklıktadır?", "11", "📏 11 metre!"),
-    ("FIFA'nın merkezi hangi şehirdedir?", "zürich", "🏢 Zürich, İsviçre!"),
-    ("Bir futbol maçı kaç dakikadır?", "90", "⏱️ 90 dakika (+ uzatmalar)!"),
-    ("Offside kuralı hangi atışta uygulanmaz?", "taç", "🙅 Taç atışlarında offside yoktur!"),
-    ("İki sarı kart hangi sonucu doğurur?", "kırmızı", "🟥 İki sarı = Kırmızı kart!"),
-    ("Messi kaç kez Ballon d'Or kazanmıştır?", "8", "🏆 8 kez — Rekor!"),
-    ("Avrupa'nın en büyük turnuvası hangisidir?", "şampiyonlar ligi", "🌟 UEFA Şampiyonlar Ligi!"),
-    ("Bir futbol takımında kaç oyuncu sahada olur?", "11", "👥 11 oyuncu!"),
-    ("Köşe vuruşu ne zaman kullanılır?", "topa son dokunan savunmacıysa", "🚩 Top savunmacıdan çıktığında!"),
-    ("Hangi ülke 2018 Dünya Kupası'nı kazandı?", "fransa", "🇫🇷 Fransa!"),
-    ("Galatasaray'ın UEFA Kupası hangi yıldandır?", "2000", "🏆 2000 yılı!"),
-    ("Fenerbahçe'nin geleneksel renkleri nelerdir?", "sarı lacivert", "💛💙 Sarı - Lacivert!"),
+    ("1954 Dünya Kupası'nda 'Büyük Facia' olarak bilinen olayda hangi takım, favori olduğu halde ilk turda elenmiştir?", "macaristan", "🇭🇺 Macaristan — Sırrı Ortaç'ın unutulmaz röportajının konusu!"),
+    ("FIFA Dünya Kupası tarihinde 'Maracanazo' olarak bilinen şok sonuca hangi maç damga vurmuştur?", "uruguay brezilya", "🇺🇾 1950'de Uruguay, Brezilya'yı kendi evinde yenmiştir!"),
+    ("İngiltere Premier League'deArsenal'in 'Invincibles' (Yenilmezler) sezonunda kaç maçta yenilmedikleri tarihe geçmiştir?", "49", "🏆 2003-2004 sezonunda tam 49 maç!"),
+    ("Lionel Messi'nin Barcelona'daki tek bir sezonda en fazla gol attığı '60+' gol rekorunu kırdığı sezon hangi yıla aittir?", "2012", "⚽ 2011-2012 sezonunda tam 73 gol atmıştır!"),
+    ("Serie A tarihinde 'Calciopoli' skandalı sonucunda 2006'da şampiyonluğu elinden alınan takım hangisidir?", "juventus", "⚫⚪ Juventus şampiyonluğu gasp edilmiş ve Serie B'ye düşürülmüştür!"),
+    ("Bir futbol maçında bir kalecinin attığı golden sonra 'Kaleci Golü' denmez de literatüre girmiş özel bir gol türü olan 'Olimpik Gol' hangi yöntemle atılır?", "açaraktan", "🥅 Açıktan ayağı değer touching yapmadan doğrudan kaleye!"),
+    ("UEFA Şampiyonlar Ligi'nde bir takımın aynı maç içinde 4-0 geriden gelip kazandığı tarihi 'Miracle of Istanbul' (İstanbul Mucizesi) maçı hangi yıldadır?", "2005", "🔴 Liverpool, 2005 finalinde Milan'ı penaltılarla geçmiştir!"),
+    ("Galatasaray'ın 2000 UEFA Kupası finalinde attığı tarihi gollerin toplam skoru kaçtır?", "4-1", "🦁 Galatasaray, Arsenal'i ekstra sürelerde 4-1 mağlup etmiştir!"),
+    ("Hugo Sánchez'in attığı 'Rabbit Jump' (Tavşan Zıplaması) olarak bilinen ve literatüre giren şutun özelliği nedir?", "ters çevrilerek zıplayar", "🐰 Meksikalı efsane golü atarken arka arkaya zıplardı!"),
+    ("Real Madrid'in 'Los Galácticos' (Galaksi Takımı) döneminde 2000 yılında transfer edilen ilk efsanevi isim hangisidir?", "figo", "⭐ Luís Figo, Barcelona'dan Real Madrid'e transfer olmuştu!"),
+    ("FIFA kurallarına göre bir futbol topunun çeper uzunluğunun (çevresinin) santimetre cinsinden kabul edilen resmi aralığı nedir?", "68-70", "📏 68 cm ile 70 cm arasında olmalıdır!"),
+    ("Hangi Afrika ülkesi, Dünya Kupası tarihinde çeyrek finale yükselen ilk ve tek takım unvanını taşımaktadır?", "kamerun gana senegal marako", "🌍 Kamerun (1990), Senegal (2002) ve Gana (2010) çeyrek final görmüştür!"),
+    ("Bir penaltı atışında kalecinin çizgiden kaymadan önce kalecinin hareket etmesi durumunda uygulanacak kuralın FIFA'daki tam adı nedir?", "erken hareket", "🚫 Kaleci çizgiden erken çıkarsa penaltı tekrar atılır!"),
+    ("Trabzonspor'un 1970'lerde Türkiye 1. Ligi'ni 3 kez üst üste kazandığı 'Efsanevi 3'lü' dönemine hangi teknik direktör başkanlık etmiştir?", "ahmet sualp", "🎨 Ahmet Sualp ile Trabzonspor'un altın çağı başlamıştır!"),
 ]
 
 # Aktif bilgi oyunu takibi
-aktif_bilgi_oyunu = {}
+kullanilan_bilgi_sorulari = []
 
 class OyunSecDropdown(ui.Select):
     def __init__(self):
@@ -1263,10 +1275,7 @@ class OyunSecDropdown(ui.Select):
             embed=discord.Embed(title="✅ Etkinlik Başlatıldı!", description=f"**{secilen}** etkinliği seçildi.", color=0x2ECC71),
             view=None
         )
-        await interaction.channel.send(
-            f"@everyone 🎉 **{interaction.user.mention} bir etkinlik başlattı!**",
-            embed=embed
-        )
+        await interaction.channel.send(embed=embed)
 
 
 class EtkinlikView(ui.View):
@@ -1285,7 +1294,7 @@ async def etkinlik(ctx):
         title="🎉 ETKİNLİK PANELİ",
         description=(
             "Sunucuda eğlenceli bir etkinlik başlatmak mı istiyorsunuz?\n"
-            "Aşağıdan bir oyun seçin, tüm sunucu bildirim alacak! 🔥\n\n"
+            "Aşağıdan bir oyun seçin! 🔥\n\n"
             "**Mevcut Oyunlar:**\n" +
             "\n".join([f"{v['emoji']} **{k.split(' ', 1)[1]}** — {v['aciklama'][:50]}..." for k, v in OYUNLAR.items()])
         ),
@@ -1301,8 +1310,7 @@ async def etkinlik(ctx):
 async def cark(ctx, uye: discord.Member = None):
     hedef = uye or ctx.author
 
-    # Animasyon efekti
-    animasyon = await ctx.send(f"🎲 **{hedef.display_name}** için çark çeviriliyor...")
+    animasyon = await ctx.send(f"🎲 **{hedef.display_name}** için çark çevriliyor...")
     await asyncio.sleep(0.8)
     await animasyon.edit(content=f"🌀 **Çark dönüyor...** ◐")
     await asyncio.sleep(0.6)
@@ -1341,7 +1349,20 @@ async def bilgi(ctx):
     if ctx.channel.id in aktif_bilgi_oyunu:
         return await ctx.send("❌ Bu kanalda zaten aktif bir bilgi oyunu var! Bitmesini bekleyin.")
 
-    soru, cevap, aciklama = random.choice(BILGI_SORULARI)
+    # Tüm soruların hepsi kullanıldıysa sıfırla
+    if len(kullanilan_bilgi_sorulari) >= len(BILGI_SORULARI):
+        kullanilan_bilgi_sorulari.clear()
+
+    # Kullanılmamış soru seç
+    available_sorular = [s for s in BILGI_SORULARI if BILGI_SORULARI.index(s) not in kullanilan_bilgi_sorulari]
+    if not available_sorular:
+        kullanilan_bilgi_sorulari.clear()
+        available_sorular = BILGI_SORULARI
+
+    soru_ogesi = random.choice(available_sorular)
+    soru, cevap, aciklama = soru_ogesi
+    kullanilan_bilgi_sorulari.append(BILGI_SORULARI.index(soru_ogesi))
+
     aktif_bilgi_oyunu[ctx.channel.id] = {"cevap": cevap, "aciklama": aciklama, "soruldu": True}
 
     embed = discord.Embed(
@@ -1380,7 +1401,7 @@ async def bilgi(ctx):
         await ctx.send(embed=sure_bitti)
 
 
-# --- RASTGELe EŞLEŞTİR KOMUTU ---
+# --- RASTGELE EŞLEŞTİR KOMUTU ---
 @bot.command(name="eslestir")
 async def eslestir(ctx):
     uyeler = [m for m in ctx.guild.members if not m.bot and m.id != ctx.author.id]
@@ -1408,7 +1429,7 @@ async def eslestir(ctx):
         emoji = "❤️"
 
     embed = discord.Embed(
-        title="🔀 RASTGELe EŞLEŞTİRME",
+        title="🔀 RASTGELE EŞLEŞTİRME",
         color=renk,
         timestamp=datetime.datetime.now()
     )
@@ -1418,6 +1439,333 @@ async def eslestir(ctx):
     embed.add_field(name="💬 Yorum", value=yorum, inline=False)
     embed.set_footer(text="Rastgele eşleştirme sistemi")
     await ctx.send(embed=embed)
+
+
+# ====================== VAMPİR KÖYLÜ SİSTEMİ ======================
+
+class VampirKatilimView(ui.View):
+    def __init__(self, kanal_id):
+        super().__init__(timeout=120)
+        self.kanal_id = kanal_id
+
+    @discord.ui.button(label="🧛 Katıl", style=discord.ButtonStyle.danger, emoji="🩸")
+    async def katil_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        kanal = bot.get_channel(self.kanal_id)
+        if not kanal or kanal.id not in aktif_vampir_oyunu:
+            return await interaction.response.send_message("❌ Oyun zaman aşımına uğradı veya başlatılmadı!", ephemeral=True)
+        
+        oyuncular = aktif_vampir_oyunu[self.kanal_id]["oyuncular"]
+        if interaction.user.id in oyuncular:
+            return await interaction.response.send_message("❌ Zaten oyuna katıldın!", ephemeral=True)
+        if len(oyuncular) >= 20:
+            return await interaction.response.send_message("❌ Oyun dolu!", ephemeral=True)
+
+        oyuncular.append(interaction.user.id)
+        await interaction.response.send_message("✅ Oyuna başarıyla katıldın! Beklemede kal...", ephemeral=True)
+        
+        guncel_sayi = len(oyuncular)
+        mesaj = interaction.message
+        embed = mesaj.embeds[0]
+        embed.clear_fields()
+        embed.add_field(name="👥 Katılımcı Sayısı", value=f"**{guncel_sayi} / 20**", inline=True)
+        embed.add_field(name="⏳ Kalan Süre", value="**2 Dakika**", inline=True)
+        await mesaj.edit(embed=embed, view=self)
+
+
+async def baslat_vampir_oyunu(ctx):
+    kanal_id = ctx.channel.id
+    aktif_vampir_oyunu[kanal_id] = {
+        "oyuncular": [ctx.author.id],
+        "roller": {},
+        "hayatta": [],
+        "vampirler": [],
+        "basladi": False
+    }
+
+    embed = discord.Embed(
+        title="🧛 VAMPİR KÖYLÜ BAŞLADI!",
+        description="Köy karanlığa gömüldü... Aranızda 2 kan emici Vampir var! Onları bulmak için belowdaki butona bas ve hayatta kalma şansını artır!",
+        color=0x8E44AD,
+        timestamp=datetime.datetime.now()
+    )
+    embed.add_field(name="👥 Katılımcı Sayısı", value="**1 / 20**", inline=True)
+    embed.add_field(name="⏳ Kalan Süre", value="**2 Dakika**", inline=True)
+    embed.set_footer(text="Oyun 2 dakika içinde veya 5 kişi olduğunda otomatik başlayacaktır.")
+    
+    view = VampirKatilimView(kanal_id)
+    mesaj = await ctx.send(embed=embed, view=view)
+
+    # 2 dakika bekleme veya 5 kişi olma kontrolü
+    for _ in range(24): # 24 * 5sn = 120sn = 2dk
+        await asyncio.sleep(5)
+        if kanal_id not in aktif_vampir_oyunu:
+            return
+        
+        mevcut_oyuncular = aktif_vampir_oyunu[kanal_id]["oyuncular"]
+        if len(mevcut_oyuncular) >= 5:
+            break
+
+    if kanal_id not in aktif_vampir_oyunu:
+        return
+
+    mevcut_oyuncular = aktif_vampir_oyunu[kanal_id]["oyuncular"]
+    if len(mevcut_oyuncular) < 4:
+        del aktif_vampir_oyunu[kanal_id]
+        await mesaj.edit(content="❌ Oyun iptal edildi! Yeterli katılımcı yok (Minimum 4 kişi gerekli).", embed=None, view=None)
+        return
+
+    # Roller dağıtımı
+    aktif_vampir_oyunu[kanal_id]["hayatta"] = mevcut_oyuncular.copy()
+    random.shuffle(mevcut_oyuncular)
+    
+    secilen_vampirler = mevcut_oyuncular[:2]
+    aktif_vampir_oyunu[kanal_id]["vampirler"] = secilen_vampirler
+    
+    for oid in mevcut_oyuncular:
+        if oid in secilen_vampirler:
+            aktif_vampir_oyunu[kanal_id]["roller"][oid] = "Vampir"
+        else:
+            aktif_vampir_oyunu[kanal_id]["roller"][oid] = "Köylü"
+
+    # DM Bildirimleri
+    for oid in mevcut_oyuncular:
+        uye = ctx.guild.get_member(oid)
+        if not uye: continue
+        try:
+            if oid in secilen_vampirler:
+                diger_vampir = ctx.guild.get_member([v for v in secilen_vampirler if v != oid][0])
+                dm_embed = discord.Embed(title="🩸 VAMPİR KÖYLÜ - ROLÜN", color=0xE74C3C)
+                dm_embed.description = f"**Rolün: VAMPIR** 🧛\n\nGörevin: Geceleyin köylülerden birini öldürmek ve gündüz yakalanmamak!\n\n🎲 Takım arkadaşın: **{diger_vampir.display_name}**"
+                await uye.send(embed=dm_embed)
+            else:
+                dm_embed = discord.Embed(title="🛡️ VAMPİR KÖYLÜ - ROLÜN", color=0x2ECC71)
+                dm_embed.description = f"**Rolün: KÖYLÜ** 🧑‍🌾\n\nGörevin: Gündüz yapılan oylamalarda vampirleri bulmak ve köyü kurtarmak! Kimseye güvenme..."
+                await uye.send(embed=dm_embed)
+        except discord.Forbidden:
+            pass
+
+    aktif_vampir_oyunu[kanal_id]["basladi"] = True
+    baslangic_embed = discord.Embed(
+        title="🌙 GECE ÇÖKTÜ!",
+        description=f"**{len(mevcut_oyuncular)}** kişiyle oyun başladı! Herkese rolleri özel mesaj (DM) olarak gönderildi.\n\n🧛 **2 Vampir** görevini yapıyor...",
+        color=0x2C3E50
+    )
+    baslangic_embed.set_footer(text="Vampirler hedeflerini seçiyorlar...")
+    await mesaj.edit(embed=baslangic_embed, view=None)
+
+    await asyncio.sleep(2)
+    await vampir_gece_fazı(ctx, kanal_id, mesaj)
+
+
+async def vampir_gece_fazı(ctx, kanal_id, ana_mesaj):
+    if kanal_id not in aktif_vampir_oyunu:
+        return
+    veri = aktif_vampir_oyunu[kanal_id]
+    if not veri["basladi"]:
+        return
+
+    hayatta_köylüler = [oid for oid in veri["hayatta"] if oid not in veri["vampirler"]]
+    
+    if not hayatta_köylüler:
+        await vampir_oyunu_bitti(ctx, kanal_id, ana_mesaj, "vampir")
+        return
+
+    # Vampirlere DM ile Hedef Seçtirme
+    for vid in veri["vampirler"]:
+        if vid not in veri["hayatta"]: continue
+        vampir_uye = ctx.guild.get_member(vid)
+        if not vampir_uye: continue
+        
+        hedef_listesi = "\n".join([f"• **{ctx.guild.get_member(oid).display_name}** (ID: `{oid}`)" for oid in hayatta_köylüler])
+        
+        dm_embed = discord.Embed(
+            title="🌙 GECE FAZI - HEDEF SEÇ",
+            description=f"Öldürmek istediğin köylüyü seç. Takım arkadaşınla aynı kişiye zarar vermeyi deneyin!\n\n**Hedefler:**\n{hedef_listesi}",
+            color=0x8E44AD
+        )
+        dm_embed.set_footer(text="NOT: Kanala sadece ID'yi yazarak oylama yapabilirsiniz.")
+        
+        try:
+            await vampir_uye.send(embed=dm_embed)
+        except:
+            pass
+
+    bekleme = await ana_mesaj.channel.send("⏳ Vampirler hedeflerini belirliyor... (30 saniye)")
+    
+    hedef_oylar = {}
+    def check_vampir(m):
+        if m.channel.id != kanal_id or m.author.bot: return False
+        if m.author.id not in veri["vampirler"]: return False
+        if m.author.id not in veri["hayatta"]: return False
+        try:
+            hedef_id = int(m.content.strip())
+            return hedef_id in veri["hayatta"] and hedef_id not in veri["vampirler"]
+        except ValueError:
+            return False
+
+    try:
+        while True:
+            msg = await bot.wait_for("message", timeout=30.0, check=check_vampir)
+            hedef_oylar[msg.author.id] = int(msg.content.strip())
+            if len(hedef_oylar) >= len([v for v in veri["vampirler"] if v in veri["hayatta"]]):
+                break
+    except asyncio.TimeoutError:
+        pass
+
+    await bekleme.delete()
+
+    # Öldürme Mantığı
+    oy_sayilari = {}
+    for _, hedef in hedef_oylar.items():
+        oy_sayilari[hedef] = oy_sayilari.get(hedef, 0) + 1
+    
+    if oy_sayilari:
+        en_cok_oy = max(oy_sayilari.values())
+        olasi_hedefler = [k for k, v in oy_sayilari.items() if v == en_cok_oy]
+        kurban_id = random.choice(olasi_hedefler)
+        
+        veri["hayatta"].remove(kurban_id)
+        kurban_uye = ctx.guild.get_member(kurban_id)
+        
+        gunduz_embed = discord.Embed(
+            title="☀️ GÜNDÜZ DOĞDU!",
+            description=f"Gece boyunca korkunç çığlıklar duyuldu...\n\n🩸 **{kurban_uye.mention}** vampirler tarafından acımasızca öldürüldü!",
+            color=0xE67E22
+        )
+        gunduz_embed.set_footer(text="Köylüler toplandı! Vampirlerin kim olduğunu bulmak için oylama başlıyor...")
+        await ana_mesaj.channel.send(embed=gunduz_embed)
+        
+        # Kurbanın DM'ine Ölüm Haberi
+        try:
+            olum_embed = discord.Embed(title="💀 ÖLDÜRÜLDÜN!", description="Vampirler seni gece vahşice yok etti! Artık oyun dışısın ama izlemeye devam edebilirsin.", color=0x000000)
+            await kurban_uye.send(embed=olum_embed)
+        except:
+            pass
+
+        await asyncio.sleep(3)
+        await vampir_gunduz_oylamasi(ctx, kanal_id, ana_mesaj)
+    else:
+        kimse_embed = discord.Embed(title="🌅 Sabah Oldu!", description="Gece sessiz geçti... Vampirler kimseyi öldüremedi veya hedef seçmedi!", color=0xF1C40F)
+        await ana_mesaj.channel.send(embed=kimse_embed)
+        await asyncio.sleep(3)
+        await vampir_gunduz_oylamasi(ctx, kanal_id, ana_mesaj)
+
+
+async def vampir_gunduz_oylamasi(ctx, kanal_id, ana_mesaj):
+    if kanal_id not in aktif_vampir_oyunu:
+        return
+    veri = aktif_vampir_oyunu[kanal_id]
+    
+    hayatta_oyuncular = [oid for oid in veri["hayatta"]]
+    if len(hayatta_oyuncular) == 0:
+        return
+
+    # Oylama Listesi Oluşturma
+    oylama_metni = "\n".join([f"**{ctx.guild.get_member(oid).display_name}** (ID: `{oid}`)" for oid in hayatta_oyuncular])
+    
+    oylama_embed = discord.Embed(
+        title="⚖️ OYLAMA BAŞLADI!",
+        description=f"Vampir olduğuna inandığın kişinin **ID'sini** yazıp gönder!\n\n**Adaylar:**\n{oylama_metni}",
+        color=0x3498DB
+    )
+    oylama_embed.set_footer(text="45 saniyeniz var! En çok oyu alan kişinin kartı açılacak.")
+    await ana_mesaj.channel.send(embed=oylama_embed)
+
+    oylar = {}
+    def check_oylama(m):
+        if m.channel.id != kanal_id or m.author.bot: return False
+        if m.author.id not in veri["hayatta"]: return False
+        try:
+            hedef_id = int(m.content.strip())
+            return hedef_id in veri["hayatta"] and hedef_id != m.author.id
+        except ValueError:
+            return False
+
+    try:
+        while True:
+            msg = await bot.wait_for("message", timeout=45.0, check=check_oylama)
+            oylar[msg.author.id] = int(msg.content.strip())
+    except asyncio.TimeoutError:
+        pass
+
+    # Oylama Sonuçları
+    oy_sayilari = {}
+    for _, hedef in oylar.items():
+        oy_sayilari[hedef] = oy_sayilari.get(hedef, 0) + 1
+    
+    if not oy_sayilari:
+        await ana_mesaj.channel.send("❌ Kimse oy vermedi! Oylama atlandı, gece tekrar başlıyor...")
+        await asyncio.sleep(3)
+        await vampir_gece_fazı(ctx, kanal_id, ana_mesaj)
+        return
+
+    en_cok_oy = max(oy_sayilari.values())
+    birinci_adaylar = [k for k, v in oy_sayilari.items() if v == en_cok_oy]
+    secilen_id = random.choice(birinci_adaylar)
+    
+    secilen_uye = ctx.guild.get_member(secilen_id)
+    gercek_rol = veri["roller"].get(secilen_id, "Bilinmiyor")
+    
+    if gercek_rol == "Vampir":
+        veri["hayatta"].remove(secilen_id)
+        sonuc_embed = discord.Embed(
+            title="🛡️ VAMPIR YAKALANDI!",
+            description=f"**{secilen_uye.mention}** kişisine **{en_cok_oy}** oy verildi!\n\n🩸 Kartı açıldı: **VAMPİR**\nKöylüler zaferi bir adım daha yaklaştı!",
+            color=0x2ECC71
+        )
+        await ana_mesaj.channel.send(embed=sonuc_embed)
+    else:
+        veri["hayatta"].remove(secilen_id)
+        sonuc_embed = discord.Embed(
+            title="😭 MASUM BİR KÖYLÜ ÖLDÜ!",
+            description=f"**{secilen_uye.mention}** kişisine **{en_cok_oy}** oy verildi!\n\n🛡️ Kartı açıldı: **KÖYLÜ**\nVampirler kıkırdıyor...",
+            color=0xE74C3C
+        )
+        await ana_mesaj.channel.send(embed=sonuc_embed)
+
+    # Kazanma/Kaybetme Kontrolü
+    kalan_vampir_sayisi = len([v for v in veri["vampirler"] if v in veri["hayatta"]])
+    kalan_koylu_sayisi = len([o for o in veri["hayatta"] if o not in veri["vampirler"]])
+    
+    if kalan_vampir_sayisi == 0:
+        await vampir_oyunu_bitti(ctx, kanal_id, ana_mesaj, "koylu")
+    elif kalan_vampir_sayisi >= kalan_koylu_sayisi:
+        await vampir_oyunu_bitti(ctx, kanal_id, ana_mesaj, "vampir")
+    else:
+        await asyncio.sleep(4)
+        gece_msg = await ana_mesaj.channel.send("🌙 Tekrar gece çöktü... Herkes korkuyla evlerine kapandı!")
+        await asyncio.sleep(3)
+        await vampir_gece_fazı(ctx, kanal_id, ana_mesaj)
+
+
+async def vampir_oyunu_bitti(ctx, kanal_id, ana_mesaj, kazanan):
+    if kanal_id in aktif_vampir_oyunu:
+        del aktif_vampir_oyunu[kanal_id]
+    
+    if kazanan == "koylu":
+        bitis_embed = discord.Embed(
+            title="🎉 KÖYLÜLER KAZANDI!",
+            description="Tüm vampirler temizlendi! Köyde huzur yeniden sağlandı.",
+            color=0x2ECC71
+        )
+        bitis_embed.set_footer(text="Tebrikler masum köylüler!")
+    else:
+        bitis_embed = discord.Embed(
+            title="🩸 VAMPIRLER KAZANDI!",
+            description="Vampirler köyün kontrolünü tamamen ele geçirdi! Karanlık çöktü...",
+            color=0x8E44AD
+        )
+        bitis_embed.set_footer(text="Köylüler için çok geçti...")
+        
+    await ana_mesaj.channel.send(embed=bitis_embed)
+
+
+@bot.command(name="vk")
+async def vk(ctx):
+    if ctx.channel.id in aktif_vampir_oyunu:
+        return await ctx.send("❌ Bu kanalda zaten aktif bir Vampir Köylü oyunu devam ediyor!")
+    
+    await baslat_vampir_oyunu(ctx)
 
 
 # ====================== EKSTRİ KOMUTLAR ======================
@@ -1611,7 +1959,8 @@ class YardimDropDown(ui.Select):
                 "**`.etkinlik`** - Etkinlik panelini açar, oyun seçilir ve duyuru yapılır.\n"
                 "**`.cark [@üye]`** - Şans çarkını çevirir! Ödül veya ceza çıkabilir.\n"
                 "**`.bilgi`** - Futbol sorusu sorar, ilk doğru cevaplayan kazanır!\n"
-                "**`.eslestir`** - İki sunucu üyesini rastgele eşleştirir!\n\n"
+                "**`.eslestir`** - İki sunucu üyesini rastgele eşleştirir!\n"
+                "**`.vk`** - **Vampir Köylü** oyununu başlatır. (Katılmak için butona bas)\n\n"
                 "**Mevcut Etkinlik Oyunları:**\n" +
                 "\n".join([f"{v['emoji']} **{k.split(' ', 1)[1]}**" for k, v in OYUNLAR.items()])
             )
