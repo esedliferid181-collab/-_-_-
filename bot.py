@@ -118,13 +118,17 @@ async def on_message(message):
         del afk_kullanicilar[message.author.id]
         await message.channel.send(
             f"👋 Tekrar hoş geldin {message.author.mention}! AFK modundan çıkarıldın.",
-            delete_after=5
+            delete_after=5,
+            allowed_mentions=discord.AllowedMentions(everyone=False, roles=False, users=True)
         )
 
     for mention in message.mentions:
         if mention.id in afk_kullanicilar:
             sebep = afk_kullanicilar[mention.id]
-            await message.channel.send(f"⚠️ {mention.name} şu an AFK durumda! \n📝 Sebep: **{sebep}**")
+            await message.channel.send(
+                f"⚠️ {mention.name} şu an AFK durumda! \n📝 Sebep: **{sebep}**",
+                allowed_mentions=discord.AllowedMentions(everyone=False, roles=False, users=True)
+            )
 
     mesaj = message.content.strip()
     if mesaj in ["sa", "Sa"]:
@@ -491,8 +495,21 @@ async def snipe(ctx):
 
 @bot.command()
 async def afk(ctx, *, sebep="Meşgul/Uzakta"):
+    # @everyone ve @here etiketlerini afk sebebinden temizle
+    yasaklar = ["@everyone", "@here"]
+    for yasak in yasaklar:
+        sebep = sebep.replace(yasak, "")
+    
+    # Boşluk bırakmışsa temizle
+    sebep = " ".join(sebep.split()) or "Meşgul/Uzakta"
+    
     afk_kullanicilar[ctx.author.id] = sebep
-    await ctx.send(f"✅ {ctx.author.mention} artık AFK! Sebep: **{sebep}**")
+    
+    # Mesajı gönderirken allow_everyone=False kullan (İkinci güvenlik katmanı)
+    await ctx.send(
+        f"✅ {ctx.author.mention} artık AFK! Sebep: **{sebep}**",
+        allowed_mentions=discord.AllowedMentions(everyone=False, roles=False, users=True)
+    )
 
 
 @bot.command()
