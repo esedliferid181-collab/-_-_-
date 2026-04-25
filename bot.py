@@ -1367,18 +1367,10 @@ OYUNLAR = {
 CARK_SONUCLARI = [
     ("🏆 BÜYÜK ÖDÜL", "Tebrikler! Bir yetkili sana **+5M** değer ekleyecek!", "odul", 0x2ECC71),
     ("⭐ KÜÇÜK ÖDÜL", "Tebrikler! Bir yetkili sana **+1M** değer ekleyecek!", "odul", 0x27AE60),
-    ("🎁 SÜRPRİZ ÖDÜL", "Yetkili istediği özel ödülü seçiyor! Ne çıkacak bilinmez...", "odul", 0xF39C12),
-    ("🧛 VAMPİR İŞARETİ", "Bir sonraki Vampir Köylü oyununda otomatik olarak **Vampir** olacaksın!", "odul", 0x8E44AD),
-    ("🛡️ KÖYLÜ KALKANI", "Bir sonraki Vampir Köylü oyununda geceleyin bir kez ölümden kurtulma hakkın var!", "odul", 0x2ECC71),
     ("😂 UTANÇ CEZASI", "5 dakika boyunca profilinde en utanç verici fotoğrafı kullanacaksın!", "ceza", 0xE67E22),
     ("💀 SUSTURMA CEZASI", "1 dakika sessize alındın! Çarkın adaleti böyle!", "ceza", 0xE74C3C),
-    ("⚡ DEĞER DEĞİŞİMİ", "Yanındaki kişiyle değerlerinin yarısı el değiştirir! Yetkili uygular.", "ceza", 0x9B59B6),
     ("🔁 TEKRAR ÇEVİR", "Şans sana gülmedi! Bir kez daha çevirme hakkın var.", "notr", 0x3498DB),
     ("🌟 ŞAMPIYON UNVANI", "Bu haftalık 'Çark Şampiyonu' unvanı senin! Tebrikler!", "odul", 0xF1C40F),
-    ("🎭 ROL DEĞİŞİMİ", "Bir sonraki mesajında başka bir kullanıcının adına konuşacaksın!", "notr", 0x1ABC9C),
-    ("💸 DEĞERSİZ", "Bugünlük değerin sıfırlandı sayılır! (Gerçek değil, sadece roleplay!)", "ceza", 0xC0392B),
-    ("🩸 KAN KAYBI", "Vampirler seni buldu! Bir yetkili senden **-2M** değer çıkaracak!", "ceza", 0xE74C3C),
-    ("🏥 DOKTOR MÜDAHALESİ", "Tam ölecektin ama doktor yetişti! Değerin sabit kalıyor, şanslısın!", "notr", 0x3498DB),
 ]
 
 BILGI_SORULARI = [
