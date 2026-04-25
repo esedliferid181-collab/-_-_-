@@ -5,6 +5,7 @@ import datetime
 import asyncio
 import random
 import os
+import json
 
 # --- AYARLAR ---
 TOKEN = os.environ.get("DISCORD_TOKEN")
@@ -25,6 +26,10 @@ KAYITSIZ_ROL = "Kayıtsız"
 ROL_UYE = "Üye"
 ROL_FUTBOLCU = "Futbolcu"
 ROL_TAKIM_BASKANI = "Takım Başkanı"
+LIG_COMMANDER_ROL_ADI = "League Commander"
+
+# Bot sahibi ID'leri (vk komutunu kullanabilecekler)
+VK_YETKILI_IDS = [1438202822897434738]
 
 # ====================== TAKIM ROL ID'LERİ ======================
 TAKIM_ROLLERI = {
@@ -47,20 +52,72 @@ TAKIM_ROLLERI = {
 }
 
 # ================================================================
-# Veri Saklama Alanları
+# Veri Saklama Alanları (bellekte)
 son_silinenler = {}
 afk_kullanicilar = {}
 kap_bellek = {}
 kayit_sayaci = {}
 deger_sayaci = {}
-antrenman_sayac = {}
 mesaj_sayaci = {}
-gunluk_mesaj_sayaci = {}  # Günlük mesaj sayacı (tarih bazlı)
+gunluk_mesaj_sayaci = {}
 snipe_all_listesi = {}
 aktif_bilgi_oyunu = {}
 aktif_vampir_oyunu = {}
+cark_gunluk = {}          # {user_id: {"tarih": "YYYY-MM-DD", "sayi": int}}
+son_cark_sonucu = {}      # {user_id: son_sonuc_index} — tekrar engellemek için
+kariyer_verileri = {}     # {user_id: {"takimlar": [...], "goller": int, "asistler": int}}
 
+# ====================== KALICI VERİ (JSON) ======================
+ANTRENMAN_DOSYA = "antrenman_sayac.json"
+KARIYER_DOSYA = "kariyer_verileri.json"
 
+def antrenman_yukle():
+    if os.path.exists(ANTRENMAN_DOSYA):
+        try:
+            with open(ANTRENMAN_DOSYA, "r") as f:
+                data = json.load(f)
+                return {int(k): v for k, v in data.items()}
+        except:
+            pass
+    return {}
+
+def antrenman_kaydet(sayac):
+    try:
+        with open(ANTRENMAN_DOSYA, "w") as f:
+            json.dump({str(k): v for k, v in sayac.items()}, f)
+    except:
+        pass
+
+def kariyer_yukle():
+    if os.path.exists(KARIYER_DOSYA):
+        try:
+            with open(KARIYER_DOSYA, "r") as f:
+                data = json.load(f)
+                return {int(k): v for k, v in data.items()}
+        except:
+            pass
+    return {}
+
+def kariyer_kaydet(veriler):
+    try:
+        with open(KARIYER_DOSYA, "w") as f:
+            json.dump({str(k): v for k, v in veriler.items()}, f, ensure_ascii=False)
+    except:
+        pass
+
+# Başlangıçta yükle
+antrenman_sayac = antrenman_yukle()
+kariyer_verileri = kariyer_yukle()
+
+# ====================== YARDIMCI FONKSİYONLAR ======================
+def rol_bul_esnek(guild, rol_adi):
+    """Büyük/küçük harf farkı gözetmeksizin rol bulur."""
+    for rol in guild.roles:
+        if rol.name.lower() == rol_adi.lower():
+            return rol
+    return None
+
+# ====================== OLAYLAR ======================
 @bot.event
 async def on_ready():
     print(f'--------------------------------------------------')
@@ -72,7 +129,6 @@ async def on_ready():
     await bot.change_presence(activity=discord.Streaming(name=".yardım | NOVA PLUS", url="https://twitch.tv/NOVA"))
 
 
-# --- OLAYLAR ---
 @bot.event
 async def on_message_delete(message):
     if message.author.bot:
@@ -89,16 +145,13 @@ async def on_message(message):
     if message.author.bot:
         return
 
-    # Toplam mesaj sayacı
     mesaj_sayaci[message.author.id] = mesaj_sayaci.get(message.author.id, 0) + 1
 
-    # Günlük mesaj sayacı
     bugun = datetime.date.today().isoformat()
     if bugun not in gunluk_mesaj_sayaci:
         gunluk_mesaj_sayaci[bugun] = {}
     gunluk_mesaj_sayaci[bugun][message.author.id] = gunluk_mesaj_sayaci[bugun].get(message.author.id, 0) + 1
 
-    # Snipe listesi
     kanal_id = message.channel.id
     if kanal_id not in snipe_all_listesi:
         snipe_all_listesi[kanal_id] = []
@@ -113,7 +166,6 @@ async def on_message(message):
         if (simdi - m["zaman"]).total_seconds() < 300
     ]
 
-    # AFK kontrolü
     if message.author.id in afk_kullanicilar:
         del afk_kullanicilar[message.author.id]
         await message.channel.send(
@@ -334,12 +386,20 @@ def rol_yetkisi_var_mi(kisi):
         return any(rol.id == ROL_YETKILI_ROL_ID for rol in kisi.roles)
     return kisi.guild_permissions.manage_roles
 
+def lig_commander_mi(kisi):
+    if kisi.guild_permissions.administrator:
+        return True
+    return any(rol.name.lower() == LIG_COMMANDER_ROL_ADI.lower() for rol in kisi.roles)
+
 
 # ====================== ROL KOMUTLARI ======================
 @bot.command()
-async def rolver(ctx, member: discord.Member, *, rol: discord.Role):
+async def rolver(ctx, member: discord.Member, *, rol_adi: str):
     if not rol_yetkisi_var_mi(ctx.author):
         return await ctx.send("❌ Bu komutu kullanmak için yetkiniz yok!")
+    rol = rol_bul_esnek(ctx.guild, rol_adi)
+    if not rol:
+        return await ctx.send(f"❌ **{rol_adi}** adında bir rol bulunamadı!")
     try:
         await member.add_roles(rol)
         embed = discord.Embed(
@@ -353,9 +413,12 @@ async def rolver(ctx, member: discord.Member, *, rol: discord.Role):
 
 
 @bot.command()
-async def rolal(ctx, member: discord.Member, *, rol: discord.Role):
+async def rolal(ctx, member: discord.Member, *, rol_adi: str):
     if not rol_yetkisi_var_mi(ctx.author):
         return await ctx.send("❌ Bu komutu kullanmak için yetkiniz yok!")
+    rol = rol_bul_esnek(ctx.guild, rol_adi)
+    if not rol:
+        return await ctx.send(f"❌ **{rol_adi}** adında bir rol bulunamadı!")
     try:
         await member.remove_roles(rol)
         embed = discord.Embed(
@@ -376,14 +439,14 @@ async def toplurolver(ctx, *, girdi: str):
         parcalar = girdi.split(' ', 1)
         if len(parcalar) < 2:
             return await ctx.send(
-                "❌ Hatalı Kullanım! \nÖrnek: .toplurolver @Kullanıcı Rol 1, Rol 2 veya .toplurolver hepsi Oyuncu"
+                "❌ Hatalı Kullanım!\nÖrnek: .toplurolver @Kullanıcı Rol 1, Rol 2 veya .toplurolver hepsi Oyuncu"
             )
         hedef = parcalar[0]
         roller_metni = parcalar[1]
         rol_adlari = [r.strip() for r in roller_metni.split(',')]
         verilecek_rollar = []
         for ad in rol_adlari:
-            rol = discord.utils.get(ctx.guild.roles, name=ad)
+            rol = rol_bul_esnek(ctx.guild, ad)
             if rol:
                 verilecek_rollar.append(rol)
         if not verilecek_rollar:
@@ -408,7 +471,7 @@ async def toplurolver(ctx, *, girdi: str):
             except:
                 continue
         await islem_mesaji.edit(
-            content=f"✅ İşlem Tamamlandı! \n👥 Toplam **{sayac}** kişiye "
+            content=f"✅ İşlem Tamamlandı!\n👥 Toplam **{sayac}** kişiye "
                     f"{', '.join([r.name for r in verilecek_rollar])} rolleri başarıyla tanımlandı."
         )
     except Exception as e:
@@ -426,7 +489,7 @@ async def toplurolal(ctx, *, girdi: str):
         rol_adlari = [r.strip() for r in roller_metni.split(',')]
         alinacak_rollar = []
         for ad in rol_adlari:
-            rol = discord.utils.get(ctx.guild.roles, name=ad)
+            rol = rol_bul_esnek(ctx.guild, ad)
             if rol:
                 alinacak_rollar.append(rol)
         if not alinacak_rollar:
@@ -448,7 +511,7 @@ async def toplurolal(ctx, *, girdi: str):
                     await asyncio.sleep(0.5)
             except:
                 continue
-        await islem_mesaji.edit(content=f"✅ Başarılı! \n👥 **{sayac}** kişiden belirtilen roller geri alındı.")
+        await islem_mesaji.edit(content=f"✅ Başarılı!\n👥 **{sayac}** kişiden belirtilen roller geri alındı.")
     except Exception as e:
         await ctx.send(f"⚠️ Hata: {e}")
 
@@ -462,7 +525,7 @@ async def roll(ctx, *, secenekler: str):
     secim = random.choice(liste)
     embed = discord.Embed(
         title="🎲 Karar Verildi!",
-        description=f"Seçenekler: {', '.join(liste)} \n\n✨ Sonuç: **{secim}**",
+        description=f"Seçenekler: {', '.join(liste)}\n\n✨ Sonuç: **{secim}**",
         color=discord.Color.purple()
     )
     embed.set_footer(text=f"İsteyen: {ctx.author.name}")
@@ -495,17 +558,11 @@ async def snipe(ctx):
 
 @bot.command()
 async def afk(ctx, *, sebep="Meşgul/Uzakta"):
-    # @everyone ve @here etiketlerini afk sebebinden temizle
     yasaklar = ["@everyone", "@here"]
     for yasak in yasaklar:
         sebep = sebep.replace(yasak, "")
-    
-    # Boşluk bırakmışsa temizle
     sebep = " ".join(sebep.split()) or "Meşgul/Uzakta"
-    
     afk_kullanicilar[ctx.author.id] = sebep
-    
-    # Mesajı gönderirken allow_everyone=False kullan (İkinci güvenlik katmanı)
     await ctx.send(
         f"✅ {ctx.author.mention} artık AFK! Sebep: **{sebep}**",
         allowed_mentions=discord.AllowedMentions(everyone=False, roles=False, users=True)
@@ -516,7 +573,7 @@ async def afk(ctx, *, sebep="Meşgul/Uzakta"):
 async def ship(ctx, member: discord.Member):
     oran = random.randint(0, 100)
     emoji = "❤️" if oran > 50 else "💔"
-    await ctx.send(f"📊 {ctx.author.mention} ❤️ {member.mention} \n💘 Aşk Uyumu: **%{oran}** {emoji}")
+    await ctx.send(f"📊 {ctx.author.mention} ❤️ {member.mention}\n💘 Aşk Uyumu: **%{oran}** {emoji}")
 
 
 @bot.command()
@@ -530,11 +587,10 @@ async def ara(ctx, *, isim: str):
             bulananlar.append(member)
     if not bulananlar:
         return await ctx.send(f"❌ **{isim}** adında veya içinde geçen isimde sunucuda kimse bulunamadı!")
+    kalan_mesaj = ""
     if len(bulananlar) > 15:
         kalan_mesaj = f"\n\n*...ve {len(bulananlar) - 15} kişi daha (toplam {len(bulananlar)} kişi)*"
         bulananlar = bulananlar[:15]
-    else:
-        kalan_mesaj = ""
     liste_metni = "\n".join([f"• {m.mention}  (Takma ad: {m.display_name})" for m in bulananlar])
     embed = discord.Embed(
         title=f"🔍 Arama Sonuçları: \"{isim}\"",
@@ -721,6 +777,84 @@ async def dsil(ctx, uye: discord.Member, miktar: str = None, *, sebep: str = "Be
         await ctx.send(embed=hata_embed(f"Hata: {e}"))
 
 
+# ====================== KARİYER SİSTEMİ ======================
+@bot.command(name="kariyer")
+async def kariyer(ctx, uye: discord.Member = None):
+    hedef = uye or ctx.author
+    veri = kariyer_verileri.get(hedef.id, {"takimlar": [], "goller": 0, "asistler": 0})
+    
+    embed = discord.Embed(
+        title=f"⚽ {hedef.display_name} — Kariyer İstatistikleri",
+        color=0x5865F2,
+        timestamp=datetime.datetime.now()
+    )
+    embed.set_thumbnail(url=hedef.display_avatar.url)
+    
+    takimlar_metni = "\n".join([f"• {t}" for t in veri["takimlar"]]) if veri["takimlar"] else "Henüz takım yok"
+    embed.add_field(name="🏟️ Oynadığı Takımlar", value=takimlar_metni, inline=False)
+    embed.add_field(name="⚽ Gol", value=f"**{veri['goller']}**", inline=True)
+    embed.add_field(name="🎯 Asist", value=f"**{veri['asistler']}**", inline=True)
+    embed.add_field(name="🏆 Toplam Katkı", value=f"**{veri['goller'] + veri['asistler']}**", inline=True)
+    embed.set_footer(text=f"Kariyer verisi | ID: {hedef.id}")
+    
+    await ctx.send(embed=embed)
+
+
+@bot.command(name="golekle")
+async def golekle(ctx, uye: discord.Member, miktar: int = 1):
+    if not lig_commander_mi(ctx.author):
+        return await ctx.send(embed=hata_embed("Bu komutu kullanmak için **League Commander** rolüne sahip olmalısın!"))
+    if miktar <= 0:
+        return await ctx.send(embed=hata_embed("Gol sayısı 0'dan büyük olmalı!"))
+    
+    if uye.id not in kariyer_verileri:
+        kariyer_verileri[uye.id] = {"takimlar": [], "goller": 0, "asistler": 0}
+    
+    kariyer_verileri[uye.id]["goller"] += miktar
+    kariyer_kaydet(kariyer_verileri)
+    
+    await ctx.send(embed=basari_embed(
+        f"⚽ **{uye.display_name}** için **+{miktar}** gol eklendi!\n"
+        f"📊 Toplam Gol: **{kariyer_verileri[uye.id]['goller']}**"
+    ))
+
+
+@bot.command(name="asistekle")
+async def asistekle(ctx, uye: discord.Member, miktar: int = 1):
+    if not lig_commander_mi(ctx.author):
+        return await ctx.send(embed=hata_embed("Bu komutu kullanmak için **League Commander** rolüne sahip olmalısın!"))
+    if miktar <= 0:
+        return await ctx.send(embed=hata_embed("Asist sayısı 0'dan büyük olmalı!"))
+    
+    if uye.id not in kariyer_verileri:
+        kariyer_verileri[uye.id] = {"takimlar": [], "goller": 0, "asistler": 0}
+    
+    kariyer_verileri[uye.id]["asistler"] += miktar
+    kariyer_kaydet(kariyer_verileri)
+    
+    await ctx.send(embed=basari_embed(
+        f"🎯 **{uye.display_name}** için **+{miktar}** asist eklendi!\n"
+        f"📊 Toplam Asist: **{kariyer_verileri[uye.id]['asistler']}**"
+    ))
+
+
+@bot.command(name="takimekle")
+async def takimekle(ctx, uye: discord.Member, *, takim_adi: str):
+    if not lig_commander_mi(ctx.author):
+        return await ctx.send(embed=hata_embed("Bu komutu kullanmak için **League Commander** rolüne sahip olmalısın!"))
+    
+    if uye.id not in kariyer_verileri:
+        kariyer_verileri[uye.id] = {"takimlar": [], "goller": 0, "asistler": 0}
+    
+    kariyer_verileri[uye.id]["takimlar"].append(takim_adi)
+    kariyer_kaydet(kariyer_verileri)
+    
+    await ctx.send(embed=basari_embed(
+        f"🏟️ **{uye.display_name}** için **{takim_adi}** takımı kaydedildi!\n"
+        f"📋 Kariyer geçmişi: {', '.join(kariyer_verileri[uye.id]['takimlar'])}"
+    ))
+
+
 # ====================== TAKIM BASKANI DROPDOWN ======================
 class TakimSecDropdown(ui.Select):
     def __init__(self, hedef: discord.Member, yeni_nick: str, yapan_id: int):
@@ -901,7 +1035,7 @@ async def kayit(ctx, uye: discord.Member, *, bilgi: str):
     await ctx.send(embed=embed, view=view)
 
 
-# --- ANTRENMAN KOMUTU ---
+# --- ANTRENMAN KOMUTU --- (JSON ile kalıcı)
 @bot.command(name="antrenman")
 async def antrenman(ctx):
     if ANTRENMAN_KANAL_ID != 0 and ctx.channel.id != ANTRENMAN_KANAL_ID:
@@ -911,6 +1045,8 @@ async def antrenman(ctx):
     if mevcut > 10:
         mevcut = 1
     antrenman_sayac[uye.id] = mevcut
+    antrenman_kaydet(antrenman_sayac)
+
     dolu = "🟩" * mevcut
     bos = "⬜" * (10 - mevcut)
     embed = discord.Embed(
@@ -958,6 +1094,7 @@ async def antrenman(ctx):
                 f"Format: Ad | 1M | takım | SNT olmalı."
             ))
         antrenman_sayac[uye.id] = 0
+        antrenman_kaydet(antrenman_sayac)
 
 
 # ====================== KAP SİSTEMİ ======================
@@ -1342,7 +1479,7 @@ OYUNLAR = {
         "emoji": "🎲"
     },
     "⚡ Hızlı Bilgi": {
-        "aciklama": "Bot futbol soruları sorar! 10 saniye içinde doğru cevaplayan puan kazanır. En çok puan toplayan şampiyon!",
+        "aciklama": "Bot futbol soruları sorar! 20 saniye içinde doğru cevaplayan puan kazanır. En çok puan toplayan şampiyon!",
         "nasil": ".bilgi komutuyla soru gelir. Herkes cevabını yazar. İlk ve doğru cevap veren 1 puan alır. 5 puana ulaşan kazanır!",
         "katilimci": "2+ kişi",
         "sure": "10–15 dakika",
@@ -1356,8 +1493,8 @@ OYUNLAR = {
         "emoji": "🔀"
     },
     "🧛 Vampir Köylü": {
-        "aciklama": "Klasik Vampir Köylü oyunu! 2 Vampir gizlice birini öldürür, Köylüler ise oylama ile vampiri bulmaya çalışır.",
-        "nasil": ".vk komutu ile başlatın ve katılın. Bot size özel rolünüzü (Vampir/Köylü) DM'den söyler. Vampirler gece DM'den hedef seçer, gündüz herkes embed butonla oylama yapar.",
+        "aciklama": "Klasik Vampir Köylü oyunu! Vampirler gizlice birini öldürür, Köylüler ve Doktor ise vampiri bulmaya çalışır.",
+        "nasil": ".vk komutu ile başlatın ve katılın. Bot size özel rolünüzü (Vampir/Köylü/Doktor) DM'den söyler.",
         "katilimci": "4–20 kişi",
         "sure": "15–30 dakika",
         "emoji": "🧛"
@@ -1373,17 +1510,229 @@ CARK_SONUCLARI = [
     ("🌟 ŞAMPIYON UNVANI", "Bu haftalık 'Çark Şampiyonu' unvanı senin! Tebrikler!", "odul", 0xF1C40F),
 ]
 
+# ====================== 200 BİLGİ SORUSU ======================
 BILGI_SORULARI = [
-    ("1954 Dünya Kupası'nda 'Büyük Facia' olarak bilinen olayda hangi takım, favori olduğu halde ilk turda elenmiştir?", "macaristan", "🇭🇺 Macaristan — Sırrı Ortaç'ın unutulmaz röportajının konusu!"),
-    ("FIFA Dünya Kupası tarihinde 'Maracanazo' olarak bilinen şok sonuca hangi maç damga vurmuştur?", "uruguay brezilya", "🇺🇾 1950'de Uruguay, Brezilya'yı kendi evinde yenmiştir!"),
-    ("İngiltere Premier League'de Arsenal'in 'Invincibles' (Yenilmezler) sezonunda kaç maçta yenilmedikleri tarihe geçmiştir?", "49", "🏆 2003-2004 sezonunda tam 49 maç!"),
-    ("Lionel Messi'nin Barcelona'daki tek bir sezonda en fazla gol attığı '60+' gol rekorunu kırdığı sezon hangi yıla aittir?", "2012", "⚽ 2011-2012 sezonunda tam 73 gol atmıştır!"),
-    ("Serie A tarihinde 'Calciopoli' skandalı sonucunda 2006'da şampiyonluğu elinden alınan takım hangisidir?", "juventus", "⚫⚪ Juventus şampiyonluğu gasp edilmiş ve Serie B'ye düşürülmüştür!"),
-    ("UEFA Şampiyonlar Ligi'nde bir takımın aynı maç içinde 4-0 geriden gelip kazandığı tarihi 'Miracle of Istanbul' (İstanbul Mucizesi) maçı hangi yıldadır?", "2005", "🔴 Liverpool, 2005 finalinde Milan'ı penaltılarla geçmiştir!"),
-    ("Galatasaray'ın 2000 UEFA Kupası finalinde attığı tarihi gollerin toplam skoru kaçtır?", "4-1", "🦁 Galatasaray, Arsenal'i ekstra sürelerde 4-1 mağlup etmiştir!"),
-    ("Real Madrid'in 'Los Galácticos' (Galaksi Takımı) döneminde 2000 yılında transfer edilen ilk efsanevi isim hangisidir?", "figo", "⭐ Luís Figo, Barcelona'dan Real Madrid'e transfer olmuştu!"),
-    ("FIFA kurallarına göre bir futbol topunun çeper uzunluğunun (çevresinin) santimetre cinsinden kabul edilen resmi aralığı nedir?", "68-70", "📏 68 cm ile 70 cm arasında olmalıdır!"),
-    ("Trabzonspor'un 1970'lerde Türkiye 1. Ligi'ni 3 kez üst üste kazandığı 'Efsanevi 3'lü' dönemine hangi teknik direktör başkanlık etmiştir?", "ahmet sualp", "🎨 Ahmet Sualp ile Trabzonspor'un altın çağı başlamıştır!"),
+    ("1954 Dünya Kupası'nda 'Büyük Facia' olarak bilinen olayda hangi takım favori olduğu halde ilk turda elenmiştir?", "macaristan", "🇭🇺 Macaristan — Favori olmasına rağmen elendi!"),
+    ("FIFA Dünya Kupası tarihinde 'Maracanazo' olarak bilinen şok sonuca hangi maç damga vurmuştur?", "uruguay", "🇺🇾 1950'de Uruguay, Brezilya'yı kendi evinde yendi!"),
+    ("Arsenal'in 'Invincibles' sezonunda kaç maçlık yenilmezlik serisi elde etti?", "49", "🏆 49 maç yenilmedi!"),
+    ("Lionel Messi'nin tek sezonda en fazla gol attığı rekor kaç gol?", "91", "⚽ 2012 takvim yılında 91 gol!"),
+    ("'Calciopoli' skandalı sonucu şampiyonluğu elinden alınan takım hangisidir?", "juventus", "⚫⚪ Juventus!"),
+    ("2005 Şampiyonlar Ligi finalinde 3-0'dan dönen takım hangisidir?", "liverpool", "🔴 Liverpool İstanbul Mucizesi!"),
+    ("Galatasaray 2000 UEFA Kupası finalinde hangi takımı yendi?", "arsenal", "🦁 Arsenal'i penaltılarla!"),
+    ("Real Madrid'in ilk 'Los Galácticos' transferi kimdir?", "figo", "⭐ Luís Figo!"),
+    ("FIFA kurallarına göre futbol topunun çevresi kaç cm?", "68", "📏 68-70 cm arasında!"),
+    ("Türkiye'de ilk profesyonel futbol ligi hangi yılda kuruldu?", "1959", "🇹🇷 1959 yılında!"),
+    ("Cristiano Ronaldo'nun Premier League'de en fazla gol attığı sezon kaç gol?", "31", "⚽ 2007-08 sezonunda 31 gol!"),
+    ("Pele kaç kez Dünya Kupası kazandı?", "3", "🏆 1958, 1962, 1970!"),
+    ("Hangi takım Şampiyonlar Ligi tarihinde en fazla şampiyonluğa sahiptir?", "real madrid", "👑 Real Madrid!"),
+    ("Diego Maradona'nın 'Tanrı'nın Eli' golünü attığı maçta hangi takıma karşıydı?", "ingiltere", "🇦🇷 1986 Dünya Kupası İngiltere'ye karşı!"),
+    ("Hangi ülke en fazla FIFA Dünya Kupası kazanmıştır?", "brezilya", "🇧🇷 Brezilya, 5 kez!"),
+    ("Ronaldinho hangi takımla 2005 yılında Ballon d'Or ödülü aldı?", "barcelona", "🔵🔴 Barcelona!"),
+    ("Zlatan Ibrahimovic kaç farklı Avrupa liginde gol atmıştır?", "7", "🔥 İsveç, Hollanda, İtalya, İspanya, Fransa, İngiltere, Amerika!"),
+    ("Süper Lig tarihinde en fazla şampiyonluğu olan takım hangisidir?", "galatasaray", "🦁 Galatasaray!"),
+    ("Fenerbahçe hangi yıl kuruludu?", "1907", "🟡🔵 1907!"),
+    ("Beşiktaş'ın şampiyonluk sayısı kaçtır (yaklaşık)?", "16", "⚫⚪ 16 şampiyonluk!"),
+    ("İlk Dünya Kupası hangi ülkede düzenlendi?", "uruguay", "🇺🇾 1930 Uruguay!"),
+    ("UEFA Şampiyonlar Ligi tarihinin en pahalı transferi kimdir?", "neymar", "💰 Neymar 222M Euro!"),
+    ("Messi kaç kez Ballon d'Or kazandı?", "8", "🌟 Rekor 8 kez!"),
+    ("2022 Dünya Kupası'nı hangi takım kazandı?", "arjantin", "🇦🇷 Arjantin!"),
+    ("Türkiye Milli Takımı hangi Dünya Kupası'nda 3. oldu?", "2002", "🇹🇷 2002 Güney Kore-Japonya!"),
+    ("Premier League'in en fazla gol atan oyuncusu kimdir?", "alan shearer", "⚽ Alan Shearer 260 gol!"),
+    ("Hangi kaleci Şampiyonlar Ligi tarihinde en fazla maç kazandı?", "iker casillas", "🧤 Iker Casillas!"),
+    ("İlk UEFA Kupası'nı hangi takım kazandı?", "tottenham", "⚽ Tottenham 1972!"),
+    ("Haaland hangi takımdan Manchester City'ye transfer oldu?", "dortmund", "🟡⚫ Borussia Dortmund!"),
+    ("Mbappé'nin milli takımı hangi ülkedir?", "fransa", "🇫🇷 Fransa!"),
+    ("Türkiye'de ilk yabancı futbolcu kısıtlaması kaç kişiydi?", "3", "📋 3 yabancı oyuncu limiti!"),
+    ("Hangi Türk futbolcu Premier League'de oynamıştır?", "tugay kerimoglu", "🇹🇷 Tugay Kerimoğlu!"),
+    ("Liverpool'un tarihi rakibi kimdir?", "manchester united", "🔴 Manchester United!"),
+    ("El Clásico hangi iki takım arasında oynanır?", "barcelona real madrid", "🔵🔴 Barcelona vs Real Madrid!"),
+    ("İlk Black Friday (transfer yasağı) döneminde hangi kural uygulandı?", "transfer yasagi", "📋 Sezon ortasında transfer yasağı!"),
+    ("Münih Trajedisi hangi takımı etkiledi?", "manchester united", "✈️ Manchester United 1958!"),
+    ("Yeşil kartın futbolda ne anlama geldiği bilinmektedir?", "fair play", "💚 Fair Play ödülü!"),
+    ("Penaltı atışı ne zaman icat edildi?", "1891", "⚽ 1891 yılında!"),
+    ("Süper Lig'de en fazla gol atan oyuncu kimdir?", "hakan sukur", "🇹🇷 Hakan Şükür!"),
+    ("Galatasaray'ın tarihi şarkısı ne ile başlar?", "cimbom", "🦁 Cimbom!"),
+    ("Futbolda ofsayt kuralı hangi organla belirlenir?", "fifa", "📋 FIFA!"),
+    ("VAR sistemi hangi yıl Dünya Kupası'nda ilk kullanıldı?", "2018", "📹 2018 Rusya!"),
+    ("Şampiyonlar Ligi marşının adı nedir?", "anthem", "🎵 UEFA Şampiyonlar Ligi Marşı!"),
+    ("Tiki-taka oyun stilini dünyaya hangi takım tanıttı?", "barcelona", "🔵🔴 Barcelona!"),
+    ("Hakan Şükür'ün Dünya Kupası tarihindeki en hızlı golü kaç saniyedeydi?", "11", "⚡ 11 saniye!"),
+    ("Süper Lig'in ilk şampiyonu kimdir?", "fenerbahce", "🟡🔵 Fenerbahçe!"),
+    ("Trabzonspor hangi yıllarda peş peşe şampiyon oldu?", "1976 1977 1978", "🏆 76-77-78!"),
+    ("Serie A'yı en fazla kazanan takım hangisidir?", "juventus", "⚫⚪ Juventus!"),
+    ("La Liga'yı en fazla kazanan takım hangisidir?", "real madrid", "👑 Real Madrid!"),
+    ("Bundesliga'yı en fazla kazanan takım hangisidir?", "bayern", "🔴 Bayern Münih!"),
+    ("Fransa Ligue 1'i en fazla kazanan takım hangisidir?", "saint etienne", "🟢 Saint-Étienne!"),
+    ("Portekiz'in en büyük futbol kulübü hangisidir?", "benfica", "🦅 Benfica!"),
+    ("Ajax hangi şehrin takımıdır?", "amsterdam", "🇳🇱 Amsterdam!"),
+    ("Roma ile Lazio'nun derbisinin adı nedir?", "derby della capitale", "🏟️ Derby della Capitale!"),
+    ("Milan derbisi kimler arasında oynanır?", "ac milan inter", "🔴⚫ AC Milan vs Inter!"),
+    ("Boca Juniors ile River Plate derbisinin adı nedir?", "superclasico", "🇦🇷 Superclásico!"),
+    ("Celtic ile Rangers derbisinin adı nedir?", "old firm", "🏴󠁧󠁢󠁳󠁣󠁴󠁿 Old Firm!"),
+    ("Şampiyonlar Ligi'nde en hızlı hat-trick kim yaptı?", "sadio mane", "⚡ Bale ve başkaları — Hızlı hat-trickler!"),
+    ("İlk Avrupa Şampiyonası'nı hangi takım kazandı?", "sovyetler birligi", "🇷🇺 Sovyetler Birliği 1960!"),
+    ("İspanya kaç kez Avrupa Şampiyonu oldu?", "3", "🇪🇸 2008, 2012, ve sonrası!"),
+    ("Almanya kaç kez Dünya Kupası kazandı?", "4", "🇩🇪 4 kez!"),
+    ("İtalya kaç kez Dünya Kupası kazandı?", "4", "🇮🇹 4 kez!"),
+    ("Fransa kaç kez Dünya Kupası kazandı?", "2", "🇫🇷 1998 ve 2018!"),
+    ("Arjantin kaç kez Dünya Kupası kazandı?", "3", "🇦🇷 1978, 1986, 2022!"),
+    ("Katar Dünya Kupası hangi yılda düzenlendi?", "2022", "🇶🇦 2022!"),
+    ("2018 Dünya Kupası'nı hangi takım kazandı?", "fransa", "🇫🇷 Fransa!"),
+    ("2014 Dünya Kupası'nı hangi takım kazandı?", "almanya", "🇩🇪 Almanya!"),
+    ("2010 Dünya Kupası'nı hangi takım kazandı?", "ispanya", "🇪🇸 İspanya!"),
+    ("2006 Dünya Kupası finalini kaybeden takım hangisidir?", "fransa", "🇫🇷 Fransa (Zidane olayı)!"),
+    ("Zidane'ın 2006 Dünya Kupası finalinde kafa attığı oyuncu kimdir?", "materazzi", "🤦 Marco Materazzi!"),
+    ("Gana'nın en ünlü futbolcusu kimdir?", "essien", "🇬🇭 Michael Essien!"),
+    ("Afrika'dan Ballon d'Or kazanan ilk oyuncu kimdir?", "george weah", "🌍 George Weah!"),
+    ("İngiltere Premier Ligi ne zaman kuruldu?", "1992", "🏴󠁧󠁢󠁥󠁮󠁧󠁿 1992!"),
+    ("Manchester City'nin lakabı nedir?", "the citizens", "🔵 The Citizens!"),
+    ("Arsenal'in stadyumunun adı nedir?", "emirates", "🔴 Emirates Stadium!"),
+    ("Chelsea'nin lakabı nedir?", "the blues", "🔵 The Blues!"),
+    ("Tottenham'ın yeni stadyumunun adı nedir?", "tottenham hotspur stadium", "🏟️ Tottenham Hotspur Stadium!"),
+    ("Liverpool'un stadyumunun adı nedir?", "anfield", "🔴 Anfield!"),
+    ("Borussia Dortmund'un stadyumunun adı nedir?", "signal iduna park", "🟡 Signal Iduna Park!"),
+    ("Bayern Münih'in stadyumunun adı nedir?", "allianz arena", "🔴 Allianz Arena!"),
+    ("Camp Nou hangi takımın stadyumudur?", "barcelona", "🔵🔴 Barcelona!"),
+    ("Bernabéu hangi takımın stadyumudur?", "real madrid", "⚪ Real Madrid!"),
+    ("San Siro hangi iki takımın stadyumudur?", "ac milan inter", "🔴⚫ AC Milan ve Inter!"),
+    ("Galatasaray'ın stadyumunun adı nedir?", "rams park", "🦁 Rams Park!"),
+    ("Fenerbahçe'nin stadyumunun adı nedir?", "sukru saracoglu", "🟡🔵 Şükrü Saracoğlu!"),
+    ("Beşiktaş'ın stadyumunun adı nedir?", "besiktas park", "⚫⚪ Beşiktaş Park!"),
+    ("Trabzonspor'un stadyumunun adı nedir?", "papara park", "🔵🟤 Papara Park!"),
+    ("İlk Süper Lig sezonu hangi yılda oynandı?", "1959", "📅 1959!"),
+    ("Rıdvan Dilmen hangi takımlarda oynadı?", "fenerbahce", "⭐ Fenerbahçe ve diğerleri!"),
+    ("Tuncay Şanlı hangi İngiliz takımında oynadı?", "middlesbrough", "🏴󠁧󠁢󠁥󠁮󠁧󠁿 Middlesbrough!"),
+    ("Arda Turan hangi büyük İspanya takımında oynadı?", "barcelona", "🔵🔴 Barcelona!"),
+    ("Caner Erkin hangi Rus takımında oynadı?", "cska moskova", "🔴 CSKA Moskova!"),
+    ("Volkan Demirel hangi takımın efsane kalecisidir?", "fenerbahce", "🟡🔵 Fenerbahçe!"),
+    ("Rustu Recber hangi takımda oynadı?", "barcelona", "🔵🔴 Barcelona!"),
+    ("İlhan Mansız 2002 Dünya Kupası'nda hangi pozisyonda oynadı?", "forvet", "⚽ Forvet!"),
+    ("Naim Süleymanoğlu futbolcu mu?", "hayir", "🏋️ Hayır, halterci!"),
+    ("Türkiye'nin Dünya Kupası'ndaki en büyük galibiyeti kaç farklı?", "6", "🇹🇷 2002'de 6-0 Çin!"),
+    ("Şenol Güneş hangi ülkenin teknik direktörüydü?", "turkiye", "🇹🇷 Türkiye!"),
+    ("Fatih Terim'in lakabı nedir?", "imparator", "👑 İmparator!"),
+    ("Mustafa Denizli'nin lakabı nedir?", "aslan parca", "🦁 Aslan Parça!"),
+    ("Aykut Kocaman hangi takımı çalıştırdı?", "fenerbahce", "🟡🔵 Fenerbahçe!"),
+    ("Hamza Hamzaoğlu hangi takımı 2015'te şampiyon yaptı?", "galatasaray", "🦁 Galatasaray!"),
+    ("Premier League'in en kısa süreli teknik direktörü kim?", "les reed", "📋 Les Reed - 41 gün!"),
+    ("Mourinho'nun lakabı nedir?", "the special one", "😎 The Special One!"),
+    ("Guardiola'nın ilk şampiyonluğunu aldığı takım hangisidir?", "barcelona b", "🔵🔴 Barcelona B takımı!"),
+    ("Klopp'un Dortmund'da aldığı en büyük başarı nedir?", "bundesliga", "🏆 Bundesliga şampiyonluğu!"),
+    ("Wenger Arsenal'de kaç yıl görev yaptı?", "22", "📅 22 yıl!"),
+    ("Futbolda 'pressing' taktik sistemini kim popülerleştirdi?", "klopp", "⚽ Jürgen Klopp!"),
+    ("İlk kadın futbol Dünya Kupası hangi yılda düzenlendi?", "1991", "⚽ 1991 Çin!"),
+    ("ABD kadın milli takımının en ünlü oyuncusu kimdir?", "mia hamm", "🇺🇸 Mia Hamm!"),
+    ("Fußball Bundesliga ne zaman kuruldu?", "1963", "🇩🇪 1963!"),
+    ("Hollanda'nın 'Turuncu' lakabı ne anlama gelir?", "ulusal renk", "🇳🇱 Hollanda'nın ulusal rengi!"),
+    ("Ajax'ın taktik felsefesinin adı nedir?", "total football", "⚽ Total Football!"),
+    ("Johan Cruyff hangi ülkedendir?", "hollanda", "🇳🇱 Hollanda!"),
+    ("Franz Beckenbauer'ın lakabı nedir?", "der kaiser", "👑 Der Kaiser!"),
+    ("Ronaldo (Nazario) kaç Dünya Kupası kazandı?", "2", "🏆 1994 ve 2002!"),
+    ("Romario kaç Dünya Kupası golü attı?", "5", "⚽ 1994'te 5 gol!"),
+    ("Zinedine Zidane hangi ülkedendir?", "fransa", "🇫🇷 Fransa!"),
+    ("Ronaldinho'nun gerçek adı nedir?", "ronaldo assis", "🇧🇷 Ronaldo de Assis Moreira!"),
+    ("Kaka hangi kulüpten Real Madrid'e transfer oldu?", "ac milan", "🔴⚫ AC Milan!"),
+    ("Thierry Henry hangi ülkenin milli takımında oynadı?", "fransa", "🇫🇷 Fransa!"),
+    ("Didier Drogba hangi ülkedendir?", "fildisi sahili", "🇨🇮 Fildişi Sahili!"),
+    ("Samuel Eto'o hangi ülkedendir?", "kamerun", "🇨🇲 Kamerun!"),
+    ("Michael Owen kaç yaşında Dünya Kupası'nda gol attı?", "18", "⚽ 18 yaşında!"),
+    ("Wayne Rooney Premier League'de kaç gol attı?", "208", "🏴󠁧󠁢󠁥󠁮󠁧󠁿 208 gol!"),
+    ("Steven Gerrard hangi takımda oynadı?", "liverpool", "🔴 Liverpool!"),
+    ("Frank Lampard Chelsea'de kaç gol attı?", "211", "🔵 211 gol!"),
+    ("Patrick Vieira hangi takımla zirveye çıktı?", "arsenal", "🔴 Arsenal!"),
+    ("Paul Scholes hangi takımın efsanesidir?", "manchester united", "🔴 Manchester United!"),
+    ("Roy Keane hangi takımın efsane kaptanıdır?", "manchester united", "🔴 Manchester United!"),
+    ("Eric Cantona hangi İngiliz takımında oynadı?", "manchester united", "🔴 Manchester United!"),
+    ("Dennis Bergkamp hangi şeyden korktuğu bilinir?", "ucak", "✈️ Uçaktan korkar!"),
+    ("Roberto Carlos'un en ünlü golü hangi ülkeye atılmıştır?", "fransa", "🇫🇷 Fransa'ya karşı 1997!"),
+    ("Cafu hangi pozisyonda oynadı?", "sag bek", "🏃 Sağ bek!"),
+    ("İlk Altın Ayak ödülünü kim aldı?", "eusebio", "🏆 Eusébio 1968!"),
+    ("Eusébio hangi ülkedendir?", "portekiz", "🇵🇹 Portekiz!"),
+    ("Lev Yashin hangi ülkedendir?", "sovyetler birligi", "🇷🇺 Sovyetler Birliği!"),
+    ("Lev Yashin kaç penaltı kurtardığı bilinir?", "150", "🧤 ~150 penaltı!"),
+    ("İlk futbol kulübü hangisidir?", "sheffield fc", "⚽ Sheffield FC 1857!"),
+    ("FIFA kaç ülke tarafından kuruldu?", "7", "🌍 7 ülke!"),
+    ("FIFA ne zaman kuruldu?", "1904", "📅 1904!"),
+    ("UEFA ne zaman kuruldu?", "1954", "📅 1954!"),
+    ("Türk Futbol Federasyonu ne zaman kuruldu?", "1923", "🇹🇷 1923!"),
+    ("Süper Lig'de sezonluk en fazla gol rekorunu kim tutmaktadır?", "hakan sukur", "🇹🇷 Hakan Şükür!"),
+    ("Süper Lig'de en fazla asist rekorunu kim tutmaktadır?", "ali tandogan", "🎯 Ali Tandoğan!"),
+    ("Türkiye'nin UEFA kupası tarihindeki en büyük başarısı nedir?", "galatasaray 2000", "🦁 Galatasaray 2000 UEFA Kupası!"),
+    ("Galatasaray 2000 UEFA Süper Kupası'nı hangi takımla oynadı?", "real madrid", "⭐ Real Madrid!"),
+    ("Beşiktaş'ın UEFA Şampiyonlar Ligi'nde en iyi sonucu nedir?", "ceyrek final", "⚫⚪ Çeyrek final!"),
+    ("Fenerbahçe UEFA Şampiyonlar Ligi'nde hangi gruptan çıktı?", "grup asama", "🟡🔵 Grup aşamasına kaldı!"),
+    ("Trabzonspor'un Avrupa'daki en başarılı dönemi hangi yıllardır?", "1976 1977 1978", "🏆 1976-1978!"),
+    ("Türkiye Süper Kupası'nı en fazla kazanan takım hangisidir?", "galatasaray", "🦁 Galatasaray!"),
+    ("Ziraat Türkiye Kupası'nı en fazla kazanan takım hangisidir?", "galatasaray", "🦁 Galatasaray!"),
+    ("İlk resmi futbol maçı hangi yılda oynandı?", "1872", "⚽ İskoçya-İngiltere 1872!"),
+    ("Wembley ne zaman açıldı?", "1923", "🏟️ 1923!"),
+    ("Maradona'nın 1986 Dünya Kupası finalinde karşı takım kimdi?", "bati almanya", "🇩🇪 Batı Almanya!"),
+    ("Roger Milla kaç yaşında Dünya Kupası'nda gol attı?", "42", "🎂 42 yaşında!"),
+    ("Kamerun 1990 Dünya Kupası'nda hangi turda elendi?", "ceyrek final", "🦁 Çeyrek finalde!"),
+    ("1950 Dünya Kupası'nda Brezilya'nın Uruguay'a kaybettiği maçın skoru neydi?", "2-1", "🇧🇷 Brezilya 1-2 Uruguay!"),
+    ("Pelé Dünya Kupası'nda toplam kaç gol attı?", "12", "⚽ 12 gol!"),
+    ("Miroslav Klose Dünya Kupası tarihinin en golcüsüdür. Kaç gol attı?", "16", "🇩🇪 16 gol!"),
+    ("Ronaldo Nazario Dünya Kupası'nda toplam kaç gol attı?", "15", "🇧🇷 15 gol!"),
+    ("2002 Dünya Kupası'nda Türkiye yarı finalde hangi takıma kaybetti?", "brezilya", "🇧🇷 Brezilya!"),
+    ("Kemal Aydoğdu hangi Türk takımında oynadı?", "fenerbahce", "🟡🔵 Fenerbahçe!"),
+    ("Okan Buruk şu anda hangi takımın teknik direktörüdür?", "galatasaray", "🦁 Galatasaray!"),
+    ("Viktor İsayev Galatasaray'da hangi ülkeden geldi?", "rusya", "🇷🇺 Rusya!"),
+    ("Türkiye'nin En Uzun Maç serisi kaç gündü?", "bilinmiyor", "📋 Tarihsel bilgi!"),
+    ("Pelé'nin gerçek adı nedir?", "edson arantes", "🇧🇷 Edson Arantes do Nascimento!"),
+    ("Johan Cruyff'un 14 numaralı formasıyla özdeşleştiği kulüp hangisidir?", "ajax", "🇳🇱 Ajax!"),
+    ("Messi'nin ilk profosyonel sözleşmesi hangi yaşta imzalandı?", "13", "📝 13 yaşında!"),
+    ("Ronaldo'nun Juventus'a transfer bedeli ne kadardı?", "100 milyon", "💶 ~100 Milyon Euro!"),
+    ("Kylian Mbappé'nin Dünya Kupası'nı kazandığı yaş kaçtır?", "19", "🌟 19 yaşında!"),
+    ("Neymar'ın Barcelona'ya transfer bedeli ne kadardı?", "57 milyon", "💶 57 Milyon Euro!"),
+    ("Kevin De Bruyne hangi takımda oynar?", "manchester city", "🔵 Manchester City!"),
+    ("Virgil van Dijk hangi takımda oynar?", "liverpool", "🔴 Liverpool!"),
+    ("Mohamed Salah hangi ülkedendir?", "misir", "🇪🇬 Mısır!"),
+    ("Robert Lewandowski kaç kez Bundesliga golcüsü oldu?", "9", "🇵🇱 9 kez!"),
+    ("Luka Modrić hangi ülkedendir?", "hirvatistan", "🇭🇷 Hırvatistan!"),
+    ("Modrić Ballon d'Or'u hangi yıl kazandı?", "2018", "🏆 2018!"),
+    ("İvan Rakitić hangi ülkedendir?", "hirvatistan", "🇭🇷 Hırvatistan!"),
+    ("Xavi Hernandez hangi takımın teknik direktörüdür?", "barcelona", "🔵🔴 Barcelona!"),
+    ("Iniesta son kulübü hangi ülkedeydi?", "japonya", "🇯🇵 Japonya - Vissel Kobe!"),
+    ("Sergio Busquets kariyerinin büyük bölümünü nerede geçirdi?", "barcelona", "🔵🔴 Barcelona!"),
+    ("Casemiro hangi takıma transfer oldu?", "manchester united", "🔴 Manchester United!"),
+    ("Marcelo Brozovic hangi ülkedendir?", "hirvatistan", "🇭🇷 Hırvatistan!"),
+    ("Şampiyonlar Ligi finali 2023'ü hangi takım kazandı?", "manchester city", "🔵 Manchester City!"),
+    ("Şampiyonlar Ligi finali 2022'yi hangi takım kazandı?", "real madrid", "👑 Real Madrid!"),
+    ("Şampiyonlar Ligi finali 2021'i hangi takım kazandı?", "chelsea", "🔵 Chelsea!"),
+    ("Şampiyonlar Ligi finali 2020'yi hangi takım kazandı?", "bayern", "🔴 Bayern Münih!"),
+    ("Şampiyonlar Ligi finali 2019'u hangi takım kazandı?", "liverpool", "🔴 Liverpool!"),
+    ("Hangi ülke hiç Dünya Kupası'na katılamamıştır?", "cin", "🇨🇳 Çin 2002 hariç!"),
+    ("En küçük ülke olarak Dünya Kupası'na katılan hangisidir?", "trinidad", "🌍 Trinidad ve Tobago!"),
+    ("EURO 2024'ü hangi takım kazandı?", "ispanya", "🇪🇸 İspanya!"),
+    ("2024 Kopa Amerika'yı hangi takım kazandı?", "arjantin", "🇦🇷 Arjantin!"),
+    ("Futbolda 'Gegenpressing' taktiğini kim geliştirdi?", "klopp", "⚽ Jürgen Klopp!"),
+    ("Hangi teknik direktör hem oyuncu hem teknik direktör olarak Dünya Kupası kazandı?", "didier deschamps", "🇫🇷 Didier Deschamps!"),
+    ("Mario Balotelli hangi ülkenin milli takımında oynadı?", "italya", "🇮🇹 İtalya!"),
+    ("Zlatan Ibrahimovic'in en çok golü olan kulübü hangisidir?", "psg", "🔵🔴 PSG!"),
+    ("Antoine Griezmann hangi takımda oynamaktadır?", "atletico madrid", "🔴⚪ Atletico Madrid!"),
+    ("Karim Benzema hangi ülkedendir?", "fransa", "🇫🇷 Fransa!"),
+    ("Benzema Ballon d'Or'u hangi yıl kazandı?", "2022", "🏆 2022!"),
+    ("Luis Suarez hangi ülkedendir?", "uruguay", "🇺🇾 Uruguay!"),
+    ("Suarez'in ısırma skandalı hangi Dünya Kupası'nda oldu?", "2014", "😬 2014 Brezilya!"),
+    ("Gareth Bale hangi ülkenin milli takımında oynadı?", "galler", "🏴󠁧󠁢󠁷󠁬󠁳󠁿 Galler!"),
+    ("Bale'in Real Madrid'e transfer bedeli ne kadardı?", "100 milyon", "💶 ~100 Milyon Euro!"),
+    ("David Beckham hangi takımla kariyer yaptı?", "manchester united", "🔴 Manchester United ve diğerleri!"),
+    ("Beckham hangi ülkenin milli takımında oynadı?", "ingiltere", "🏴󠁧󠁢󠁥󠁮󠁧󠁿 İngiltere!"),
+    ("Paolo Maldini kaç yıl AC Milan'da oynadı?", "25", "🔴⚫ 25 yıl!"),
+    ("Alessandro Nesta hangi kulübün efsanesidir?", "ac milan", "🔴⚫ AC Milan!"),
+    ("Gianluigi Buffon kaç kez Serie A şampiyonu oldu?", "10", "⚫⚪ 10 kez Juventus ile!"),
+    ("Francesco Totti hangi kulüpte kariyerini geçirdi?", "roma", "🟡🔴 Roma!"),
+    ("Adriano 'İmparator' lakabını hangi takımda aldı?", "inter", "⚫🔵 Inter!"),
+    ("Eto'o Şampiyonlar Ligi'ni kaç farklı takımla kazandı?", "3", "🏆 Barcelona, Inter, Chelsea!"),
+    ("Didier Drogba Chelsea'de kaç gol attı?", "164", "🔵 164 gol!"),
+    ("Cesc Fabregas Arsenal'e kaç yaşında katıldı?", "16", "📋 16 yaşında!"),
+    ("Fabregas kariyerinde kaç takımda oynadı?", "4", "⚽ Arsenal, Barça, Chelsea, Monaco!"),
+    ("Claudio Ranieri Leicester City'yi şampiyon yaptığı sezon kaçıncıydı?", "2016", "🦊 2016!"),
+    ("Leicester City şampiyonluk oranı ne kadardı?", "5000", "🎲 5000/1!"),
+    ("Jaime Vardy bu sezon kaç gol attı?", "24", "📋 Leicester şampiyonluk sezonunda 24 gol!"),
+    ("N'Golo Kante hangi küçük kulüpten keşfedildi?", "caen", "🇫🇷 Caen!"),
+    ("Dimitar Berbatov hangi ülkedendir?", "bulgaristan", "🇧🇬 Bulgaristan!"),
+    ("Nicolas Anelka kaç takımda oynadı?", "12", "⚽ Birçok kulüp!"),
 ]
 
 kullanilan_bilgi_sorulari = []
@@ -1452,10 +1801,31 @@ async def etkinlik(ctx):
     await ctx.send(embed=embed, view=EtkinlikView())
 
 
-# --- ŞANS ÇARKI KOMUTU ---
+# --- ŞANS ÇARKI KOMUTU --- (Günlük limit 5, tekrar engellemesi)
 @bot.command(name="cark")
 async def cark(ctx, uye: discord.Member = None):
     hedef = uye or ctx.author
+    bugun = datetime.date.today().isoformat()
+    
+    # Günlük limit kontrolü
+    kullanici_cark = cark_gunluk.get(hedef.id, {"tarih": "", "sayi": 0})
+    if kullanici_cark["tarih"] == bugun and kullanici_cark["sayi"] >= 5:
+        return await ctx.send(embed=hata_embed(
+            f"⏰ **{hedef.display_name}** günlük çark limitine ulaştı! (5/5)\nYarın tekrar dene!"
+        ))
+    
+    if kullanici_cark["tarih"] != bugun:
+        cark_gunluk[hedef.id] = {"tarih": bugun, "sayi": 0}
+    
+    # Aynı sonucu arka arkaya verme
+    son_sonuc = son_cark_sonucu.get(hedef.id, -1)
+    kullanilabilir = [i for i in range(len(CARK_SONUCLARI)) if i != son_sonuc]
+    secilen_index = random.choice(kullanilabilir)
+    son_cark_sonucu[hedef.id] = secilen_index
+    
+    cark_gunluk[hedef.id]["sayi"] += 1
+    kalan = 5 - cark_gunluk[hedef.id]["sayi"]
+    
     animasyon = await ctx.send(f"🎲 **{hedef.display_name}** için çark çevriliyor...")
     await asyncio.sleep(0.8)
     await animasyon.edit(content="🌀 **Çark dönüyor...** ◐")
@@ -1466,35 +1836,41 @@ async def cark(ctx, uye: discord.Member = None):
     await asyncio.sleep(0.6)
     await animasyon.edit(content="🌀 **Çark yavaşlıyor...** ◒")
     await asyncio.sleep(0.8)
-    sonuc_adi, sonuc_aciklama, tur, renk = random.choice(CARK_SONUCLARI)
+    
+    sonuc_adi, sonuc_aciklama, tur, renk = CARK_SONUCLARI[secilen_index]
     embed = discord.Embed(title="🎡 ŞANS ÇARKI SONUCU", color=renk, timestamp=datetime.datetime.now())
     embed.add_field(name="👤 Oyuncu", value=hedef.mention, inline=True)
     embed.add_field(name="🎯 Sonuç", value=f"**{sonuc_adi}**", inline=True)
     embed.add_field(name="📋 Ne Olacak?", value=sonuc_aciklama, inline=False)
     if tur == "odul":
-        embed.set_footer(text="🎉 Tebrikler! Şans sana güldü!")
+        embed.set_footer(text=f"🎉 Tebrikler! Şans sana güldü! | Kalan hakkın: {kalan}/5")
     elif tur == "ceza":
-        embed.set_footer(text="😈 Çarkın adaleti işledi!")
+        embed.set_footer(text=f"😈 Çarkın adaleti işledi! | Kalan hakkın: {kalan}/5")
     else:
-        embed.set_footer(text="🔄 Ne ödül ne ceza, ortada kaldın!")
+        embed.set_footer(text=f"🔄 Ne ödül ne ceza, ortada kaldın! | Kalan hakkın: {kalan}/5")
     await animasyon.delete()
     await ctx.send(embed=embed)
 
 
-# --- HIZLI BİLGİ KOMUTU ---
+# --- HIZLI BİLGİ KOMUTU --- (200 farklı soru)
 @bot.command(name="bilgi")
 async def bilgi(ctx):
     if ctx.channel.id in aktif_bilgi_oyunu:
         return await ctx.send("❌ Bu kanalda zaten aktif bir bilgi oyunu var! Bitmesini bekleyin.")
+    
+    # Tüm sorular kullanıldıysa sıfırla
     if len(kullanilan_bilgi_sorulari) >= len(BILGI_SORULARI):
         kullanilan_bilgi_sorulari.clear()
-    available_sorular = [s for s in BILGI_SORULARI if BILGI_SORULARI.index(s) not in kullanilan_bilgi_sorulari]
-    if not available_sorular:
+    
+    kullanilmayanlar = [i for i, _ in enumerate(BILGI_SORULARI) if i not in kullanilan_bilgi_sorulari]
+    if not kullanilmayanlar:
         kullanilan_bilgi_sorulari.clear()
-        available_sorular = BILGI_SORULARI
-    soru_ogesi = random.choice(available_sorular)
-    soru, cevap, aciklama = soru_ogesi
-    kullanilan_bilgi_sorulari.append(BILGI_SORULARI.index(soru_ogesi))
+        kullanilmayanlar = list(range(len(BILGI_SORULARI)))
+    
+    secilen_index = random.choice(kullanilmayanlar)
+    kullanilan_bilgi_sorulari.append(secilen_index)
+    soru, cevap, aciklama = BILGI_SORULARI[secilen_index]
+    
     aktif_bilgi_oyunu[ctx.channel.id] = {"cevap": cevap, "aciklama": aciklama, "soruldu": True}
     embed = discord.Embed(
         title="⚡ HIZLI BİLGİ SORUSU!",
@@ -1502,7 +1878,7 @@ async def bilgi(ctx):
         color=0xF1C40F,
         timestamp=datetime.datetime.now()
     )
-    embed.set_footer(text="İlk doğru cevap veren 1 puan kazanır! | .bilgi komutu")
+    embed.set_footer(text=f"İlk doğru cevap veren kazanır! | Soru {len(kullanilan_bilgi_sorulari)}/{len(BILGI_SORULARI)}")
     await ctx.send(embed=embed)
 
     def kontrol(m):
@@ -1563,10 +1939,124 @@ async def eslestir(ctx):
     await ctx.send(embed=embed)
 
 
-# ====================== VAMPİR KÖYLÜ SİSTEMİ (YENİ - EMBED BUTONLU) ======================
+# ====================== HİKAYE KOMUTU ======================
+hikaye_bekleyen = {}  # {kanal_id: True/False}
+
+@bot.command(name="hikaye")
+async def hikaye(ctx):
+    hikaye_bekleyen[ctx.channel.id] = ctx.author.id
+    embed = discord.Embed(
+        title="📖 HİKAYE OLUŞTURUCU",
+        description=(
+            "Harika! Sana özel bir hikaye oluşturacağım.\n\n"
+            "✍️ Lütfen bir **cümle veya söz** yaz — o cümle etrafında sürükleyici bir hikaye kuracağım!\n\n"
+            "*Örnek: 'Sahaya çıkan son oyuncuydu' veya 'Penaltı atışı öncesi elleri titriyordu'*"
+        ),
+        color=0x9B59B6
+    )
+    embed.set_footer(text="60 saniye içinde cümleni yaz!")
+    await ctx.send(embed=embed)
+
+    def kontrol(m):
+        return m.channel.id == ctx.channel.id and m.author.id == ctx.author.id and not m.author.bot
+
+    try:
+        mesaj = await bot.wait_for("message", timeout=60.0, check=kontrol)
+        cumle = mesaj.content.strip()
+        del hikaye_bekleyen[ctx.channel.id]
+
+        yukleniyor = await ctx.send("✍️ Hikayeniz yazılıyor, lütfen bekleyin...")
+
+        # Hikayeyi bot kendi üretir (sabit şablon + dinamik içerik)
+        hikayeler = [
+            f"""
+🌙 **Karanlık Saha**
+
+Sahalar boştu. Seyirciler çoktan evlerine dönmüştü. Yalnızca fenerler yanıyordu.
+
+*"{cumle}"*
+
+O gece kimse onu görmüyordu. Ama o, kendini izliyordu. İçindeki ses her atışta büyüdü, her koşuda güçlendi.
+
+Sabah olduğunda saha hâlâ boştu. Ama o artık aynı kişi değildi. Bir şey değişmişti — belki dünya, belki yalnızca o.
+
+Ve o değişim, her şeyin başlangıcıydı.
+""",
+            f"""
+⚽ **Son Dakika**
+
+Maçın 90. dakikasıydı. Skor 0-0. Seyirciler nefeslerini tutuyordu.
+
+*"{cumle}"*
+
+Kimse bilmiyordu bu anın ne anlama geldiğini. Ama o biliyordu. Yıllarca bu an için çalışmıştı.
+
+Top ağlara girdiğinde stadyum çatladı. Gözlerinden yaşlar aktı — sevinçten mi, yorgunluktan mı, bilinmez.
+
+O gece herkes onun adını haykırdı. Ve o ad, artık tarihe geçmişti.
+""",
+            f"""
+🏆 **Efsanenin Doğuşu**
+
+Küçük bir kasabada, küçük bir çocuk vardı. Herkes ona "başaramazsın" diyordu.
+
+*"{cumle}"*
+
+Yıllar geçti. Kasaba büyümedi, ama çocuk büyüdü. Büyüdükçe güçlendi, güçlendikçe inandı.
+
+Bir gün o küçük kasabadan büyük bir şehre adım attı. Sahada ilk topu tuttuğunda, geçmişindeki tüm sözler kafasında yankılandı.
+
+Ama bu sefer gülümsedi. Çünkü artık o sözlerin önemi yoktu. Sahada yalnızca o vardı. Ve o, gerçekten hazırdı.
+""",
+            f"""
+🌅 **Yeni Başlangıç**
+
+Transfer dönemi kapanmıştı. Bavullar hazırlanmıştı. Yeni bir şehir, yeni bir takım.
+
+*"{cumle}"*
+
+İlk antrenman soğuktu. Takım arkadaşları onu tanımıyordu. Koç ona şüpheyle bakıyordu.
+
+Ama o sabah antrenmanı bitirdiğinde bir şey fark edildi — bu oyuncu farklıydı.
+
+Sezon sona erdiğinde en çok gol atan oyuncu oydu. Ve o sözler... O sözler hâlâ içinde yankılanıyordu. Onu oraya taşıyan da buydu zaten.
+""",
+            f"""
+🩸 **Dönüşüm**
+
+Yaralanma ağırdı. Doktorlar 6 ay sahalara dönemeyeceğini söyledi.
+
+*"{cumle}"*
+
+6 ay boyunca her gün fizik tedaviye gitti. Ağladığı geceler oldu. Vazgeçmek istediği anlar oldu.
+
+Ama o cümle aklından hiç çıkmadı. Her güne o cümleyle uyandı.
+
+6. ayın sonunda sahaya çıktığında stadyum ayakta alkışladı. Çünkü onun hikayesi, yeniden doğuşun hikayesiydi.
+"""
+        ]
+
+        secilen_hikaye = random.choice(hikayeler)
+
+        embed = discord.Embed(
+            title="📖 Hikayen Hazır!",
+            description=secilen_hikaye.strip(),
+            color=0x9B59B6,
+            timestamp=datetime.datetime.now()
+        )
+        embed.set_footer(text=f"Cümle: \"{cumle[:50]}{'...' if len(cumle)>50 else ''}\" | {ctx.author.display_name} için yazıldı")
+        await yukleniyor.delete()
+        await ctx.send(embed=embed)
+
+    except asyncio.TimeoutError:
+        if ctx.channel.id in hikaye_bekleyen:
+            del hikaye_bekleyen[ctx.channel.id]
+        await ctx.send("⏰ Süre doldu! `.hikaye` komutunu tekrar kullanabilirsin.", delete_after=10)
+
+
+# ====================== VAMPİR KÖYLÜ SİSTEMİ (DOKTOR EKLENDİ) ======================
 
 def vampir_katilan_listesi_yap(guild, oyuncular):
-    """Katılan oyuncuları embed için liste olarak döndürür."""
     liste = []
     for oid in oyuncular:
         uye = guild.get_member(oid)
@@ -1598,7 +2088,6 @@ class VampirKatilimView(ui.View):
             "✅ Oyuna başarıyla katıldın! Rolün DM olarak gelecek.", ephemeral=True
         )
 
-        # Embed'i güncelle - katılan listesini göster
         guncel_sayi = len(oyuncular)
         katilan_metni = vampir_katilan_listesi_yap(interaction.guild, oyuncular)
         embed = discord.Embed(
@@ -1622,24 +2111,18 @@ class VampirKatilimView(ui.View):
 
 
 class VampirGeceSecimView(ui.View):
-    """Vampirlerin gece DM'den hedef seçmesi için butonlu view."""
     def __init__(self, kanal_id, hedef_listesi, vampir_id):
         super().__init__(timeout=25)
         self.kanal_id = kanal_id
         self.vampir_id = vampir_id
         self.secim_yapildi = False
-        # Her hedef için buton ekle
         for hedef_id, hedef_isim in hedef_listesi:
             self.add_item(VampirHedefButon(kanal_id, hedef_id, hedef_isim, vampir_id, self))
 
 
 class VampirHedefButon(ui.Button):
     def __init__(self, kanal_id, hedef_id, hedef_isim, vampir_id, parent_view):
-        super().__init__(
-            label=hedef_isim,
-            style=discord.ButtonStyle.danger,
-            emoji="🩸"
-        )
+        super().__init__(label=hedef_isim, style=discord.ButtonStyle.danger, emoji="🩸")
         self.kanal_id = kanal_id
         self.hedef_id = hedef_id
         self.vampir_id = vampir_id
@@ -1652,7 +2135,6 @@ class VampirHedefButon(ui.Button):
             return await interaction.response.send_message("❌ Zaten seçim yaptın!", ephemeral=True)
 
         self.parent_view.secim_yapildi = True
-        # Vampir seçimini kaydet
         if self.kanal_id in aktif_vampir_oyunu:
             if "gece_secimler" not in aktif_vampir_oyunu[self.kanal_id]:
                 aktif_vampir_oyunu[self.kanal_id]["gece_secimler"] = {}
@@ -1670,15 +2152,54 @@ class VampirHedefButon(ui.Button):
         self.parent_view.stop()
 
 
+# --- DOKTOR dropdown view ---
+class DoktorKoruyuView(ui.View):
+    def __init__(self, kanal_id, hedef_listesi, doktor_id):
+        super().__init__(timeout=25)
+        self.kanal_id = kanal_id
+        self.doktor_id = doktor_id
+        self.secim_yapildi = False
+        for hedef_id, hedef_isim in hedef_listesi:
+            self.add_item(DoktorKoruyuButon(kanal_id, hedef_id, hedef_isim, doktor_id, self))
+
+
+class DoktorKoruyuButon(ui.Button):
+    def __init__(self, kanal_id, hedef_id, hedef_isim, doktor_id, parent_view):
+        super().__init__(label=hedef_isim, style=discord.ButtonStyle.success, emoji="💉")
+        self.kanal_id = kanal_id
+        self.hedef_id = hedef_id
+        self.doktor_id = doktor_id
+        self.parent_view = parent_view
+
+    async def callback(self, interaction: discord.Interaction):
+        if interaction.user.id != self.doktor_id:
+            return await interaction.response.send_message("❌ Bu buton sana ait değil!", ephemeral=True)
+        if self.parent_view.secim_yapildi:
+            return await interaction.response.send_message("❌ Zaten seçim yaptın!", ephemeral=True)
+
+        self.parent_view.secim_yapildi = True
+        if self.kanal_id in aktif_vampir_oyunu:
+            aktif_vampir_oyunu[self.kanal_id]["doktor_koruma"] = self.hedef_id
+
+        for item in self.parent_view.children:
+            item.disabled = True
+
+        onay_embed = discord.Embed(
+            title="💉 Koruma Yapıldı!",
+            description=f"**{self.label}** adlı kişiyi bu gece korudun!",
+            color=0x2ECC71
+        )
+        await interaction.response.edit_message(embed=onay_embed, view=self.parent_view)
+        self.parent_view.stop()
+
+
 class VampirOylamaView(ui.View):
-    """Gündüz oylaması için embed butonlu view."""
     def __init__(self, kanal_id, hayatta_oyuncular, guild):
         super().__init__(timeout=25)
         self.kanal_id = kanal_id
         self.guild = guild
         self.oylar = {}
         self.oy_verenler = set()
-        # Her hayatta oyuncu için buton
         for oid in hayatta_oyuncular:
             uye = guild.get_member(oid)
             if uye:
@@ -1691,11 +2212,7 @@ class VampirOylamaView(ui.View):
 
 class VampirOyButon(ui.Button):
     def __init__(self, kanal_id, hedef_id, hedef_isim, parent_view):
-        super().__init__(
-            label=hedef_isim[:80],
-            style=discord.ButtonStyle.secondary,
-            emoji="☠️"
-        )
+        super().__init__(label=hedef_isim[:80], style=discord.ButtonStyle.secondary, emoji="☠️")
         self.kanal_id = kanal_id
         self.hedef_id = hedef_id
         self.parent_view = parent_view
@@ -1726,6 +2243,8 @@ async def baslat_vampir_oyunu(ctx):
         "roller": {},
         "hayatta": [],
         "vampirler": [],
+        "doktor": None,
+        "doktor_koruma": None,
         "basladi": False,
         "gece_secimler": {}
     }
@@ -1748,13 +2267,11 @@ async def baslat_vampir_oyunu(ctx):
     view = VampirKatilimView(kanal_id, ctx.guild)
     ana_mesaj = await ctx.send(embed=embed, view=view)
 
-    # 2 dakika bekle veya 5 kişi dolunca başla
     for _ in range(24):
         await asyncio.sleep(5)
         if kanal_id not in aktif_vampir_oyunu:
             return
-        mevcut_oyuncular = aktif_vampir_oyunu[kanal_id]["oyuncular"]
-        if len(mevcut_oyuncular) >= 5:
+        if len(aktif_vampir_oyunu[kanal_id]["oyuncular"]) >= 5:
             break
 
     if kanal_id not in aktif_vampir_oyunu:
@@ -1775,34 +2292,35 @@ async def baslat_vampir_oyunu(ctx):
     aktif_vampir_oyunu[kanal_id]["hayatta"] = mevcut_oyuncular.copy()
     random.shuffle(mevcut_oyuncular)
 
-    # Vampir sayısı: 4-6 kişide 1, 7+ kişide 2
     vampir_sayisi = 1 if len(mevcut_oyuncular) <= 6 else 2
     secilen_vampirler = mevcut_oyuncular[:vampir_sayisi]
     aktif_vampir_oyunu[kanal_id]["vampirler"] = secilen_vampirler
 
+    # Doktor: Vampir olmayan oyunculardan biri (yeterince kişi varsa)
+    doktor = None
+    kalan_koyluler = [p for p in mevcut_oyuncular if p not in secilen_vampirler]
+    if len(kalan_koyluler) >= 2:
+        doktor = random.choice(kalan_koyluler)
+        aktif_vampir_oyunu[kanal_id]["doktor"] = doktor
+
     for oid in mevcut_oyuncular:
-        aktif_vampir_oyunu[kanal_id]["roller"][oid] = "Vampir" if oid in secilen_vampirler else "Köylü"
+        if oid in secilen_vampirler:
+            aktif_vampir_oyunu[kanal_id]["roller"][oid] = "Vampir"
+        elif oid == doktor:
+            aktif_vampir_oyunu[kanal_id]["roller"][oid] = "Doktor"
+        else:
+            aktif_vampir_oyunu[kanal_id]["roller"][oid] = "Köylü"
 
     # --- DM BİLDİRİMLERİ ---
-    vampir_isimleri = []
-    for vid in secilen_vampirler:
-        v_uye = ctx.guild.get_member(vid)
-        if v_uye:
-            vampir_isimleri.append(v_uye.display_name)
-
     for oid in mevcut_oyuncular:
         uye = ctx.guild.get_member(oid)
         if not uye:
             continue
         try:
             if oid in secilen_vampirler:
-                # Vampirlere takım arkadaşlarını göster
                 diger_vampirler = [ctx.guild.get_member(v) for v in secilen_vampirler if v != oid]
                 diger_isimler = ", ".join([d.display_name for d in diger_vampirler if d]) or "Yok"
-                dm_embed = discord.Embed(
-                    title="🩸 VAMPİR KÖYLÜ — ROLÜN: VAMPİR",
-                    color=0xE74C3C
-                )
+                dm_embed = discord.Embed(title="🩸 VAMPİR KÖYLÜ — ROLÜN: VAMPİR", color=0xE74C3C)
                 dm_embed.description = (
                     "**Rolün: 🧛 VAMPİR**\n\n"
                     "Görevin: Geceleyin köylülerden birini öldürmek ve gündüz yakalanmamak!\n\n"
@@ -1811,11 +2329,18 @@ async def baslat_vampir_oyunu(ctx):
                 )
                 dm_embed.set_footer(text="Kimseye rolünü söyleme!")
                 await uye.send(embed=dm_embed)
-            else:
-                dm_embed = discord.Embed(
-                    title="🛡️ VAMPİR KÖYLÜ — ROLÜN: KÖYLÜ",
-                    color=0x2ECC71
+            elif oid == doktor:
+                dm_embed = discord.Embed(title="💉 VAMPİR KÖYLÜ — ROLÜN: DOKTOR", color=0x2ECC71)
+                dm_embed.description = (
+                    "**Rolün: 💉 DOKTOR**\n\n"
+                    "Görevin: Her gece bir kişiyi vampirlerden koru!\n\n"
+                    "🛡️ Eğer vampirler koruduğun kişiyi seçerse, o kişi ölmez!\n"
+                    "⚠️ Her gece DM'den bir kişi seçerek koruma sağlarsın."
                 )
+                dm_embed.set_footer(text="Kimseye rolünü söyleme!")
+                await uye.send(embed=dm_embed)
+            else:
+                dm_embed = discord.Embed(title="🛡️ VAMPİR KÖYLÜ — ROLÜN: KÖYLÜ", color=0x3498DB)
                 dm_embed.description = (
                     "**Rolün: 🧑‍🌾 KÖYLÜ**\n\n"
                     "Görevin: Gündüz yapılan oylamalarda vampirleri bulmak ve köyü kurtarmak!\n\n"
@@ -1833,7 +2358,8 @@ async def baslat_vampir_oyunu(ctx):
         description=(
             f"**{len(mevcut_oyuncular)}** kişiyle oyun başladı!\n"
             f"Herkese rolleri DM olarak gönderildi.\n\n"
-            f"🧛 **{vampir_sayisi} Vampir** gizlice görev yapıyor..."
+            f"🧛 **{vampir_sayisi} Vampir** gizlice görev yapıyor...\n"
+            f"💉 **1 Doktor** gece bir kişiyi koruyacak..."
         ),
         color=0x2C3E50
     )
@@ -1842,7 +2368,7 @@ async def baslat_vampir_oyunu(ctx):
         value=vampir_katilan_listesi_yap(ctx.guild, mevcut_oyuncular),
         inline=False
     )
-    baslangic_embed.set_footer(text="Vampirler hedeflerini seçiyor... (25 saniye)")
+    baslangic_embed.set_footer(text="Vampirler ve Doktor hedeflerini seçiyor... (25 saniye)")
     await ana_mesaj.edit(embed=baslangic_embed, view=None)
 
     await asyncio.sleep(2)
@@ -1862,13 +2388,10 @@ async def vampir_gece_fazi(ctx, kanal_id, ana_mesaj):
         await vampir_oyunu_bitti(ctx, kanal_id, ana_mesaj, "vampir")
         return
 
-    # Gece bildirim embedini kanala gönder
+    # Gece bildirimi
     gece_embed = discord.Embed(
         title="🌙 GECE FAZI",
-        description=(
-            "Vampirler hedeflerini seçiyor...\n"
-            "**DM kutunuzu kontrol edin!** (25 saniye)"
-        ),
+        description="Vampirler hedeflerini seçiyor... Doktor ise birini koruyor!\n**DM kutunuzu kontrol edin!** (25 saniye)",
         color=0x2C3E50
     )
     hayatta_metni = "\n".join([
@@ -1877,12 +2400,13 @@ async def vampir_gece_fazi(ctx, kanal_id, ana_mesaj):
         if ctx.guild.get_member(oid)
     ])
     gece_embed.add_field(name="🫀 Hayatta Olanlar", value=hayatta_metni, inline=False)
-    gece_mesaj = await ctx.channel.send(embed=gece_embed)
+    await ctx.channel.send(embed=gece_embed)
 
-    # Vampirlere DM gönder - BUTONLU
+    # Gece seçimleri sıfırla
     veri["gece_secimler"] = {}
-    vampir_viewleri = {}
+    veri["doktor_koruma"] = None
 
+    # Vampirlere DM gönder
     for vid in veri["vampirler"]:
         if vid not in veri["hayatta"]:
             continue
@@ -1895,56 +2419,92 @@ async def vampir_gece_fazi(ctx, kanal_id, ana_mesaj):
             for oid in hayatta_koyluler
             if ctx.guild.get_member(oid)
         ]
-
         dm_embed = discord.Embed(
             title="🌙 GECE FAZI — HEDEF SEÇ!",
             description="Öldürmek istediğin köylüyü seç!\nTakım arkadaşınla aynı kişiyi seçmeye çalışın!",
             color=0x8E44AD
         )
         dm_embed.set_footer(text="25 saniyeniz var!")
-
         v_view = VampirGeceSecimView(kanal_id, hedef_listesi, vid)
-        vampir_viewleri[vid] = v_view
         try:
             await vampir_uye.send(embed=dm_embed, view=v_view)
         except discord.Forbidden:
             pass
 
+    # Doktora DM gönder
+    doktor_id = veri.get("doktor")
+    if doktor_id and doktor_id in veri["hayatta"]:
+        doktor_uye = ctx.guild.get_member(doktor_id)
+        if doktor_uye:
+            # Doktor tüm hayatta olanları koruyabilir (kendisi dahil)
+            koruma_listesi = [
+                (oid, ctx.guild.get_member(oid).display_name)
+                for oid in veri["hayatta"]
+                if ctx.guild.get_member(oid)
+            ]
+            dm_embed = discord.Embed(
+                title="💉 GECE FAZI — KİMİ KORUYACAKSIN?",
+                description="Bu gece kimi vampirlerden koruyacaksın? Aşağıdan seç!",
+                color=0x2ECC71
+            )
+            dm_embed.set_footer(text="25 saniyeniz var!")
+            d_view = DoktorKoruyuView(kanal_id, koruma_listesi, doktor_id)
+            try:
+                await doktor_uye.send(embed=dm_embed, view=d_view)
+            except discord.Forbidden:
+                pass
+
     # 25 saniye bekle
     await asyncio.sleep(25)
 
-    # Öldürme mantığı
+    # Öldürme mantığı (Doktor koruması kontrol)
     oy_sayilari = {}
     for _, hedef in veri.get("gece_secimler", {}).items():
         oy_sayilari[hedef] = oy_sayilari.get(hedef, 0) + 1
+
+    korunan = veri.get("doktor_koruma")
 
     if oy_sayilari:
         en_cok_oy = max(oy_sayilari.values())
         olasi_hedefler = [k for k, v in oy_sayilari.items() if v == en_cok_oy]
         kurban_id = random.choice(olasi_hedefler)
-        veri["hayatta"].remove(kurban_id)
-        kurban_uye = ctx.guild.get_member(kurban_id)
 
-        gunduz_embed = discord.Embed(
-            title="☀️ GÜNDÜZ DOĞDU!",
-            description=(
-                f"Gece boyunca korkunç çığlıklar duyuldu...\n\n"
-                f"🩸 **{kurban_uye.mention}** vampirler tarafından acımasızca öldürüldü!"
-            ),
-            color=0xE67E22
-        )
-        gunduz_embed.set_footer(text="Vampirleri bulmak için oylama başlıyor! (20 saniye)")
-        await ctx.channel.send(embed=gunduz_embed)
-
-        try:
-            olum_embed = discord.Embed(
-                title="💀 ÖLDÜRÜLDÜN!",
-                description="Vampirler seni gece vahşice yok etti! Artık oyun dışısın.",
-                color=0x000000
+        # Doktor korumasını kontrol et
+        if kurban_id == korunan:
+            korunan_uye = ctx.guild.get_member(kurban_id)
+            koruma_embed = discord.Embed(
+                title="💉 DOKTOR KURTARDI!",
+                description=(
+                    f"Vampirler bu gece **{korunan_uye.mention}** adlı kişiyi öldürmeye çalıştı!\n"
+                    f"Ama Doktor zamanında yetişti ve onu kurtardı! 🛡️"
+                ),
+                color=0x2ECC71
             )
-            await kurban_uye.send(embed=olum_embed)
-        except:
-            pass
+            await ctx.channel.send(embed=koruma_embed)
+        else:
+            if kurban_id in veri["hayatta"]:
+                veri["hayatta"].remove(kurban_id)
+            kurban_uye = ctx.guild.get_member(kurban_id)
+            if kurban_uye:
+                gunduz_embed = discord.Embed(
+                    title="☀️ GÜNDÜZ DOĞDU!",
+                    description=(
+                        f"Gece boyunca korkunç çığlıklar duyuldu...\n\n"
+                        f"🩸 **{kurban_uye.mention}** vampirler tarafından acımasızca öldürüldü!"
+                    ),
+                    color=0xE67E22
+                )
+                gunduz_embed.set_footer(text="Vampirleri bulmak için oylama başlıyor! (20 saniye)")
+                await ctx.channel.send(embed=gunduz_embed)
+                try:
+                    olum_embed = discord.Embed(
+                        title="💀 ÖLDÜRÜLDÜN!",
+                        description="Vampirler seni gece vahşice yok etti! Artık oyun dışısın.",
+                        color=0x000000
+                    )
+                    await kurban_uye.send(embed=olum_embed)
+                except:
+                    pass
     else:
         kimse_embed = discord.Embed(
             title="🌅 Sessiz Bir Gece...",
@@ -1955,7 +2515,6 @@ async def vampir_gece_fazi(ctx, kanal_id, ana_mesaj):
 
     await asyncio.sleep(2)
 
-    # Kazanma kontrolü
     kalan_vampir = len([v for v in veri["vampirler"] if v in veri["hayatta"]])
     kalan_koylu = len([o for o in veri["hayatta"] if o not in veri["vampirler"]])
     if kalan_vampir == 0:
@@ -1978,7 +2537,6 @@ async def vampir_gunduz_oylamasi(ctx, kanal_id, ana_mesaj):
     if len(hayatta_oyuncular) == 0:
         return
 
-    # Embed butonlu oylama
     oylama_embed = discord.Embed(
         title="⚖️ GÜNDÜZ OYLAMASI!",
         description=(
@@ -1988,7 +2546,6 @@ async def vampir_gunduz_oylamasi(ctx, kanal_id, ana_mesaj):
         ),
         color=0x3498DB
     )
-
     hayatta_metni = "\n".join([
         f"• {ctx.guild.get_member(oid).display_name}"
         for oid in hayatta_oyuncular
@@ -2000,10 +2557,8 @@ async def vampir_gunduz_oylamasi(ctx, kanal_id, ana_mesaj):
     oylama_view = VampirOylamaView(kanal_id, hayatta_oyuncular, ctx.guild)
     oylama_mesaj = await ctx.channel.send(embed=oylama_embed, view=oylama_view)
 
-    # 20 saniye bekle
     await asyncio.sleep(20)
 
-    # Butonları kapat
     for item in oylama_view.children:
         item.disabled = True
     try:
@@ -2042,6 +2597,19 @@ async def vampir_gunduz_oylamasi(ctx, kanal_id, ana_mesaj):
             ),
             color=0x2ECC71
         )
+    elif gercek_rol == "Doktor":
+        veri["hayatta"].remove(secilen_id)
+        sonuc_embed = discord.Embed(
+            title="😱 DOKTOR İDAM EDİLDİ!",
+            description=(
+                f"**{secilen_uye.mention}** {en_cok_oy} oy aldı!\n\n"
+                f"💉 Kartı açıldı: **DOKTOR** 💉\n"
+                f"Koruyucu yokluğunda vampirler daha da güçlendi..."
+            ),
+            color=0xE74C3C
+        )
+        # Doktoru listeden çıkar, bir dahaki gece aktif olmayacak
+        veri["doktor"] = None
     else:
         veri["hayatta"].remove(secilen_id)
         sonuc_embed = discord.Embed(
@@ -2071,12 +2639,16 @@ async def vampir_gunduz_oylamasi(ctx, kanal_id, ana_mesaj):
 async def vampir_oyunu_bitti(ctx, kanal_id, ana_mesaj, kazanan):
     if kanal_id in aktif_vampir_oyunu:
         veri = aktif_vampir_oyunu[kanal_id]
-        # Tüm rolleri açıkla
         rol_listesi = []
         for oid, rol in veri["roller"].items():
             uye = ctx.guild.get_member(oid)
             if uye:
-                emoji = "🧛" if rol == "Vampir" else "🧑‍🌾"
+                if rol == "Vampir":
+                    emoji = "🧛"
+                elif rol == "Doktor":
+                    emoji = "💉"
+                else:
+                    emoji = "🧑‍🌾"
                 rol_listesi.append(f"{emoji} **{uye.display_name}** — {rol}")
         del aktif_vampir_oyunu[kanal_id]
     else:
@@ -2105,9 +2677,9 @@ async def vampir_oyunu_bitti(ctx, kanal_id, ana_mesaj, kazanan):
 
 @bot.command(name="vk")
 async def vk(ctx):
-    # Sadece sunucu sahipleri kullanabilir
-    if ctx.author.id != ctx.guild.owner_id:
-        return await ctx.send(embed=hata_embed("Bu komutu sadece **sunucu sahibi** kullanabilir!"))
+    yetkili = ctx.author.id == ctx.guild.owner_id or ctx.author.id in VK_YETKILI_IDS
+    if not yetkili:
+        return await ctx.send(embed=hata_embed("Bu komutu sadece **sunucu sahibi** veya yetkili kişiler kullanabilir!"))
     if ctx.channel.id in aktif_vampir_oyunu:
         return await ctx.send("❌ Bu kanalda zaten aktif bir Vampir Köylü oyunu devam ediyor!")
     await baslat_vampir_oyunu(ctx)
@@ -2126,10 +2698,8 @@ async def gunluk_mesaj(ctx):
             color=0x3498DB
         ))
 
-    # Sıralama: En çok mesaj atandan az atana
     sirali = sorted(bugunun_verileri.items(), key=lambda x: x[1], reverse=True)
-
-    liste_satırlari = []
+    liste_satirlari = []
     toplam = 0
     sira = 1
     for uid, sayi in sirali:
@@ -2141,16 +2711,16 @@ async def gunluk_mesaj(ctx):
         elif sira == 2: madalya = "🥈"
         elif sira == 3: madalya = "🥉"
         else: madalya = f"**#{sira}**"
-        liste_satırlari.append(f"{madalya} {uye.display_name} — **{sayi}** mesaj")
+        liste_satirlari.append(f"{madalya} {uye.display_name} — **{sayi}** mesaj")
         toplam += sayi
         sira += 1
 
-    if not liste_satırlari:
+    if not liste_satirlari:
         return await ctx.send("❌ Bugün mesaj atan üye bulunamadı.")
 
     embed = discord.Embed(
-        title=f"📊 Günlük Mesaj İstatistikleri",
-        description="\n".join(liste_satırlari[:25]),  # En fazla 25 kişi göster
+        title="📊 Günlük Mesaj İstatistikleri",
+        description="\n".join(liste_satirlari[:25]),
         color=0x5865F2,
         timestamp=datetime.datetime.now()
     )
@@ -2249,12 +2819,20 @@ async def dm(ctx, uye: discord.Member, *, mesaj: str):
 
 @bot.command()
 async def pen(ctx):
-    secenekler = ["GOL ⚽", "KALECİ ÇIKTI 🧤", "AUT ❌"]
-    sonuc = random.choice(secenekler)
+    # Ardarda aynı sonucu verme
+    son = son_cark_sonucu.get(f"pen_{ctx.author.id}", -1)
+    secenekler = list(range(3))
+    kullanilabilir = [i for i in secenekler if i != son]
+    secim_index = random.choice(kullanilabilir)
+    son_cark_sonucu[f"pen_{ctx.author.id}"] = secim_index
+
+    sonuclar = ["GOL ⚽", "KALECİ ÇIKTI 🧤", "AUT ❌"]
+    sonuc = sonuclar[secim_index]
+
     sozler = {
-        "GOL ⚽": ["Muhteşem vuruş!", "Ağları salladı!", "Gol olmaz dediğin gol!"],
-        "KALECİ ÇIKTI 🧤": ["Rüya gibi kurtarış!", "Kaleci şov yaptı!", "Neyi düşünüyordun?"],
-        "AUT ❌": ["Çok az fark!", "Aut lazımdı bu maça!", "Direkten döndü, aut!"]
+        "GOL ⚽": ["Muhteşem vuruş!", "Ağları salladı!", "Gol olmaz dediğin gol!", "Köşeye yerleştirdi!"],
+        "KALECİ ÇIKTI 🧤": ["Rüya gibi kurtarış!", "Kaleci şov yaptı!", "Neyi düşünüyordun?", "Demir gibi eller!"],
+        "AUT ❌": ["Çok az fark!", "Aut lazımdı bu maça!", "Direkten döndü, aut!", "Ah be, tam yanından geçti!"]
     }
     soz = random.choice(sozler[sonuc])
     renk = 0x2ECC71 if "GOL" in sonuc else (0xFFA500 if "KALECİ" in sonuc else 0xE74C3C)
@@ -2326,9 +2904,10 @@ class YardimDropDown(ui.Select):
             discord.SelectOption(label="🛡️ Moderasyon", description="Ban, Kick, Mute, Unmute, Nuke..."),
             discord.SelectOption(label="🎭 Rol Yönetimi", description="Rol Ver, Rol Al, Toplu Rol..."),
             discord.SelectOption(label="🎬 Roleplay", description="Kayıt, Değer, Antrenman komutları."),
+            discord.SelectOption(label="⚽ Kariyer Sistemi", description="Kariyer, Gol, Asist komutları."),
             discord.SelectOption(label="📢 NOVA KAP", description="Transfer, Kiralama, Yenileme, FESH"),
             discord.SelectOption(label="🎉 Etkinlik", description="Etkinlik başlat, Çark, Bilgi, Eşleştir..."),
-            discord.SelectOption(label="🌍 Genel & Eğlence", description="Ping, Avatar, Snipe, AFK..."),
+            discord.SelectOption(label="🌍 Genel & Eğlence", description="Ping, Avatar, Snipe, AFK, Hikaye..."),
             discord.SelectOption(label="⚡ Ekstra & Sahip", description="Up, Deup, Dmall, Hesapla, Pen...")
         ]
         super().__init__(placeholder="Kategori seçin...", options=options)
@@ -2348,8 +2927,8 @@ class YardimDropDown(ui.Select):
             )
         elif self.values[0] == "🎭 Rol Yönetimi":
             embed.description = (
-                "**.rolver @üye [rol]** - Role verir.\n"
-                "**.rolal @üye [rol]** - Rolü alır.\n"
+                "**.rolver @üye [rol adı]** - Rol verir. (Büyük/küçük harf fark etmez)\n"
+                "**.rolal @üye [rol adı]** - Rolü alır. (Büyük/küçük harf fark etmez)\n"
                 "**.toplurolver @üye/hepsi [roller]** - Toplu rol verir.\n"
                 "**.toplurolal @üye/hepsi [roller]** - Toplu rol alır."
             )
@@ -2358,7 +2937,14 @@ class YardimDropDown(ui.Select):
                 "**.k @üye [İsim | Değer | Takım]** - Kayıt yapar.\n"
                 "**.dver @üye [miktar] [sebep]** - Kişiye değer ekler.\n"
                 "**.dsil @üye [miktar] [sebep]** - Kişiden değer siler.\n"
-                "**.antrenman** - Antrenman yapar, 10/10 olunca +3M verir."
+                "**.antrenman** - Antrenman yapar, 10/10 olunca +3M verir. (Kaldığı yerden devam eder!)"
+            )
+        elif self.values[0] == "⚽ Kariyer Sistemi":
+            embed.description = (
+                "**.kariyer [@üye]** - Kariyer istatistiklerini gösterir.\n"
+                "**.golekle @üye [miktar]** - Gol ekler. **(League Commander)**\n"
+                "**.asistekle @üye [miktar]** - Asist ekler. **(League Commander)**\n"
+                "**.takimekle @üye [takım adı]** - Kariyer geçmişine takım ekler. **(League Commander)**"
             )
         elif self.values[0] == "📢 NOVA KAP":
             takim_listesi = "\n".join([f"• {t}" for t in TAKIM_ROLLERI.keys()])
@@ -2370,10 +2956,10 @@ class YardimDropDown(ui.Select):
         elif self.values[0] == "🎉 Etkinlik":
             embed.description = (
                 "**.etkinlik** - Etkinlik panelini açar, oyun seçilir ve duyuru yapılır.\n"
-                "**.cark [@üye]** - Şans çarkını çevirir! Ödül veya ceza çıkabilir.\n"
-                "**.bilgi** - Futbol sorusu sorar, ilk doğru cevaplayan kazanır!\n"
+                "**.cark [@üye]** - Şans çarkını çevirir! Günlük limit: **5 hak**.\n"
+                "**.bilgi** - Futbol sorusu sorar! **200 farklı soru** arasından gelir.\n"
                 "**.eslestir** - İki sunucu üyesini rastgele eşleştirir!\n"
-                "**.vk** - **Vampir Köylü** oyununu başlatır. (Sadece Sunucu Sahibi)\n"
+                "**.vk** - **Vampir Köylü** oyununu başlatır. (Vampir + Köylü + **Doktor** rolleri)\n"
                 "**.günlükmesaj** - Bugün en çok mesaj atanları listeler.\n\n"
                 "**Mevcut Etkinlik Oyunları:**\n" +
                 "\n".join([f"{v['emoji']} **{k.split(' ', 1)[1]}**" for k, v in OYUNLAR.items()])
@@ -2387,7 +2973,8 @@ class YardimDropDown(ui.Select):
                 "**.afk [sebep]** - AFK moduna geçer.\n"
                 "**.ship @üye** - Uyumu ölçer.\n"
                 "**.roll [seçenek1, seçenek2]** - Şanslı seçim.\n"
-                "**.ara [isim]** - Sunucuda isim arar."
+                "**.ara [isim]** - Sunucuda isim arar.\n"
+                "**.hikaye** - Yazdığın cümle üzerinden bot bir hikaye oluşturur!"
             )
         elif self.values[0] == "⚡ Ekstra & Sahip":
             embed.description = (
@@ -2398,7 +2985,7 @@ class YardimDropDown(ui.Select):
                 "**.owner** - Sunucu sahibini gösterir.\n"
                 "**.dmall [mesaj]** - Herkese DM atar (Sahip).\n"
                 "**.dm @üye [mesaj]** - Kişiye DM atar.\n"
-                "**.pen** - Penaltı atar (Gol/Kale/Aut).\n"
+                "**.pen** - Penaltı atar (Gol/Kale/Aut) — ardarda aynı sonuç çıkmaz!\n"
                 "**.up @üye** - Rol yükseltir (Sahip/Özel).\n"
                 "**.deup @üye** - Rol düşürür (Sahip)."
             )
