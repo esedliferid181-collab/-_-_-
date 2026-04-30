@@ -19,7 +19,6 @@ bot = commands.Bot(command_prefix=PREFIX, intents=intents, help_command=None)
 KAYIT_YETKILI_ROL_ID = 1499363286615855144
 DEGER_YETKILI_ROL_ID = 1499385795155595296
 DEGER_LOG_KANAL_ID = 1499367585266012233
-ANTRENMAN_KANAL_ID = 1499363884593840149
 ROL_YETKILI_ROL_ID = 1499073372804481055
 KAYITLI_ROL = "Kayıtlı Üye┇🎪"
 KAYITSIZ_ROL = "Kayıtsız Üye┇🎪"
@@ -57,46 +56,7 @@ TAKIM_ROLLERI = {
     "FEYENOORD": 1499363325463756840,
 }
 
-# ====================== TAKIM SİSTEMİ AYARLARI ======================
-GECERLI_TAKIMLAR = [
-  "FC Barcelona"
-    "Real Madrid CF"
-    "ATLETİCO MADRİD"
-    "LİVERPOOL"
-    "MANCHESTER CİTY"
-    "MANCHESTER UNİTED"
-    "BAYERN MÜNİH"
-    "GALATASARAY"
-    "FENERBAHÇE"
-    "BEŞİKTAŞ"
-    "DORTMUND"
-    "PSG"
-    "JUVENTUS"
-    "AC MİLAN"
-    "İNTER"
-    "TRABZONSPOR"
-    "ARSENAL"
-    "TOTTENHAM"
-    "NEWCASTLE UNITED"
-    "BAYER LEVERKUSEN"
-    "FEYENOORD"
-]
-
-# Diziliş şemaları: mevki kısaltmaları sıralı
-DIZILIS_SEMALARI = {
-    "4-3-3": ["SLK", "SNT", "SNT", "SĞK", "OOS", "OS", "OS", "SLB", "SĞB", "STP", "STP", "KL"],
-    "4-4-2": ["SLK", "SNT", "SNT", "SĞK", "SLO", "OM", "OM", "SĞO", "STP", "STP", "KL"],
-    "4-2-3-1": ["SLK", "SNT", "SNT", "SĞK", "DOM", "DOM", "SLO", "OOM", "SĞO", "STP", "KL"],
-    "3-5-2": ["SNT", "SNT", "SNT", "SLK", "OM", "OM", "OM", "SĞK", "STP", "STP", "KL"],
-    "5-3-2": ["SLK", "SNT", "SNT", "SNT", "SĞK", "OM", "OM", "OM", "STP", "STP", "KL"],
-    "4-1-4-1": ["SLK", "SNT", "SNT", "SĞK", "DOM", "SLO", "OM", "OM", "SĞO", "STP", "KL"],
-}
-
-MEVKI_LISTESI = ["KL", "SLK", "SNT", "SĞK", "SLO", "SĞO", "OM", "OOM", "OOS", "DOM", "OS", "SLB", "SĞB", "STP"]
-
 # Veri dosyaları
-TAKIM_DOSYA = "takim_verileri.json"
-ANTRENMAN_DOSYA = "antrenman_sayac.json"
 KARIYER_DOSYA = "kariyer_verileri.json"
 
 # ================================================================
@@ -116,23 +76,6 @@ son_cark_sonucu = {}
 kariyer_verileri = {}
 
 # ====================== KALICI VERİ (JSON) ======================
-def antrenman_yukle():
-    if os.path.exists(ANTRENMAN_DOSYA):
-        try:
-            with open(ANTRENMAN_DOSYA, "r") as f:
-                data = json.load(f)
-                return {int(k): v for k, v in data.items()}
-        except:
-            pass
-    return {}
-
-def antrenman_kaydet(sayac):
-    try:
-        with open(ANTRENMAN_DOSYA, "w") as f:
-            json.dump({str(k): v for k, v in sayac.items()}, f)
-    except:
-        pass
-
 def kariyer_yukle():
     if os.path.exists(KARIYER_DOSYA):
         try:
@@ -150,39 +93,14 @@ def kariyer_kaydet(veriler):
     except:
         pass
 
-def takim_verileri_yukle():
-    if os.path.exists(TAKIM_DOSYA):
-        try:
-            with open(TAKIM_DOSYA, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except:
-            pass
-    return {}
-
-def takim_verileri_kaydet(veriler):
-    try:
-        with open(TAKIM_DOSYA, "w", encoding="utf-8") as f:
-            json.dump(veriler, f, ensure_ascii=False, indent=2)
-    except:
-        pass
-
 # Başlangıçta yükle
-antrenman_sayac = antrenman_yukle()
 kariyer_verileri = kariyer_yukle()
-takim_verileri = takim_verileri_yukle()
 
 # ====================== YARDIMCI FONKSİYONLAR ======================
 def rol_bul_esnek(guild, rol_adi):
     for rol in guild.roles:
         if rol.name.lower() == rol_adi.lower():
             return rol
-    return None
-
-def takim_adi_normalize(adi):
-    adi = adi.upper().strip()
-    for gecerli in GECERLI_TAKIMLAR:
-        if gecerli.upper() == adi:
-            return gecerli
     return None
 
 def parse_deger(metin):
@@ -231,16 +149,6 @@ def deger_isle(isim, miktar_str, islem):
     islem_str = f"+{miktar_str}" if islem == "ekle" else f"-{miktar_str}"
     return " | ".join(parcalar), islem_str
 
-def antrenman_deger_ekle(isim, miktar_m):
-    yeni_isim, _ = deger_isle(isim, str(miktar_m) + "M", "ekle")
-    if yeni_isim is None:
-        return None, None, None
-    parcalar = [p.strip() for p in yeni_isim.split("|")]
-    eski_parcalar = [p.strip() for p in isim.split("|")]
-    eski_d = eski_parcalar[1].strip() if len(eski_parcalar) >= 2 else "?"
-    yeni_d = parcalar[1].strip() if len(parcalar) >= 2 else "?"
-    return yeni_isim, eski_d, yeni_d
-
 async def log_deger_gonder(guild, yetkili, uye, eski, yeni, tur, sebep="Belirtilmedi"):
     if DEGER_LOG_KANAL_ID == 0:
         return
@@ -287,45 +195,6 @@ def hata_embed(mesaj):
 
 def basari_embed(mesaj):
     return discord.Embed(title="✅ Başarılı", description=mesaj, color=0x00ff00)
-
-def oyuncu_degeri_al(tag):
-    parcalar = [p.strip() for p in tag.split("|")]
-    if len(parcalar) < 2:
-        return 0
-    val = parse_deger(parcalar[1])
-    return (val / 1_000_000) if val else 0
-
-def oyuncu_seviyesi(deger_m):
-    if deger_m >= 250:
-        return "süperstar"
-    elif deger_m >= 175:
-        return "yildiz"
-    elif deger_m >= 100:
-        return "yuksek"
-    elif deger_m >= 30:
-        return "orta"
-    else:
-        return "dusuk"
-
-def baskan_mi(kisi_id, takim_adi):
-    t = takim_adi.upper()
-    veri = takim_verileri.get(t, {})
-    if kisi_id == veri.get("baskan_id"):
-        return True
-    return False
-
-def kaptan_mi(kisi_id, takim_adi):
-    t = takim_adi.upper()
-    veri = takim_verileri.get(t, {})
-    if kisi_id == veri.get("kaptan_id"):
-        return True
-    if kisi_id == veri.get("baskan_id"):
-        return True
-    return False
-
-def mevki_diziliste_var_mi(mevki, dizilis):
-    schema = DIZILIS_SEMALARI.get(dizilis, [])
-    return mevki.upper() in [m.upper() for m in schema]
 
 # ====================== OLAYLAR ======================
 @bot.event
@@ -607,12 +476,10 @@ async def kayitsiz_herkes(ctx):
 
     for uye in hedefler:
         try:
-            # Bot rolünden yüksek olup olmadığını kontrol et
             bot_rol = ctx.guild.me.top_role
             uye_rolleri = [r for r in uye.roles if r != ctx.guild.default_role and r.position < bot_rol.position]
 
             if len(uye.roles) <= 1:
-                # Sadece everyone rolü varsa, sadece kayıtsız ekle
                 if kayitsiz_rol not in uye.roles and kayitsiz_rol.position < bot_rol.position:
                     await uye.add_roles(kayitsiz_rol)
                     basarili += 1
@@ -620,10 +487,8 @@ async def kayitsiz_herkes(ctx):
                     atlanan += 1
                 continue
 
-            # Tüm rolleri sil
             await uye.remove_roles(*uye_rolleri)
 
-            # Kayıtsız rolünü ver
             if kayitsiz_rol.position < bot_rol.position:
                 await uye.add_roles(kayitsiz_rol)
                 basarili += 1
@@ -979,320 +844,6 @@ async def takimekle(ctx, uye: discord.Member, *, takim_adi: str):
         f"🏟️ **{uye.display_name}** için **{takim_adi}** takımı kaydedildi!"
     ))
 
-# ====================== TAKIM SİSTEMİ ======================
-
-@bot.command(name="takım")
-async def takim_goster(ctx, *, takim_adi: str):
-    t = takim_adi.upper().strip()
-    gecerli = takim_adi_normalize(t)
-    if not gecerli:
-        liste = "\n".join([f"• {t}" for t in GECERLI_TAKIMLAR])
-        return await ctx.send(embed=hata_embed(f"❌ Geçersiz takım adı!\n\n**Geçerli Takımlar:**\n{liste}"))
-
-    veri = takim_verileri.get(gecerli.upper(), {})
-
-    embed = discord.Embed(
-        title=f"🏟️ {gecerli} — Kadro",
-        color=0x2f3136,
-        timestamp=datetime.datetime.now()
-    )
-
-    baskan_id = veri.get("baskan_id")
-    kaptan_id = veri.get("kaptan_id")
-    dizilis = veri.get("dizilis", "Belirlenmedi")
-
-    baskan_uye = ctx.guild.get_member(baskan_id) if baskan_id else None
-    kaptan_uye = ctx.guild.get_member(kaptan_id) if kaptan_id else None
-
-    embed.add_field(name="👑 Başkan", value=baskan_uye.mention if baskan_uye else "Atanmadı", inline=True)
-    embed.add_field(name="🎖️ Kaptan", value=kaptan_uye.mention if kaptan_uye else "Atanmadı", inline=True)
-    embed.add_field(name="📐 Diziliş", value=dizilis, inline=True)
-
-    oyuncular = veri.get("oyuncular", [])
-    if oyuncular:
-        oyuncu_listesi = "\n".join([
-            f"[{o.get('mevki','?')}] {o.get('tag','?')}"
-            for o in oyuncular
-        ])
-        embed.add_field(name=f"⚽ İlk 11 ({len(oyuncular)}/11)", value=f"```{oyuncu_listesi}```", inline=False)
-    else:
-        embed.add_field(name="⚽ İlk 11 (0/11)", value="Kadro boş", inline=False)
-
-    yedekler = veri.get("yedekler", [])
-    if yedekler:
-        yedek_listesi = "\n".join([
-            f"[{y.get('mevki','?')}] {y.get('tag','?')}"
-            for y in yedekler
-        ])
-        embed.add_field(name=f"🪑 Yedekler ({len(yedekler)})", value=f"```{yedek_listesi}```", inline=False)
-    else:
-        embed.add_field(name="🪑 Yedekler (0)", value="Yedek yok", inline=False)
-
-    await ctx.send(embed=embed)
-
-
-@bot.command(name="takım-oyuncuekle")
-async def takim_oyuncu_ekle(ctx, oyuncu: discord.Member, mevki: str, *, takim_adi: str):
-    t = takim_adi.upper().strip()
-    gecerli = takim_adi_normalize(t)
-    if not gecerli:
-        return await ctx.send(embed=hata_embed("❌ Geçersiz takım adı!"))
-
-    anahtar = gecerli.upper()
-
-    if not (baskan_mi(ctx.author.id, anahtar) or kaptan_mi(ctx.author.id, anahtar) or ctx.author.guild_permissions.administrator):
-        return await ctx.send(embed=hata_embed("❌ Bu komutu kullanmak için **Başkan** veya **Kaptan** olmalısın!"))
-
-    if anahtar not in takim_verileri:
-        takim_verileri[anahtar] = {"baskan_id": None, "kaptan_id": None, "oyuncular": [], "yedekler": [], "dizilis": None}
-
-    veri = takim_verileri[anahtar]
-    dizilis = veri.get("dizilis")
-
-    if not dizilis:
-        return await ctx.send(embed=hata_embed("❌ Önce `.takım-dizilişseç` komutu ile diziliş belirleyin!"))
-
-    mevki_ust = mevki.upper()
-
-    schema = DIZILIS_SEMALARI.get(dizilis, [])
-    if mevki_ust not in [m.upper() for m in schema]:
-        return await ctx.send(embed=hata_embed(
-            f"❌ **{mevki}** mevkisi **{dizilis}** dizilişinde yok!\n"
-            f"Bu dizilişin mevkileri: `{'`, `'.join(schema)}`"
-        ))
-
-    if len(veri["oyuncular"]) >= 11:
-        return await ctx.send(embed=hata_embed("❌ İlk 11 dolu! Önce oyuncu çıkarın."))
-
-    for o in veri["oyuncular"]:
-        if o["id"] == oyuncu.id:
-            return await ctx.send(embed=hata_embed(f"❌ {oyuncu.display_name} zaten ilk 11'de!"))
-    for y in veri["yedekler"]:
-        if y["id"] == oyuncu.id:
-            return await ctx.send(embed=hata_embed(f"❌ {oyuncu.display_name} yedekte! Önce çıkarın."))
-
-    tag = oyuncu.display_name
-    veri["oyuncular"].append({"id": oyuncu.id, "tag": tag, "mevki": mevki_ust})
-    takim_verileri_kaydet(takim_verileri)
-
-    await ctx.send(embed=basari_embed(
-        f"⚽ **{oyuncu.display_name}** [{mevki_ust}] olarak **{gecerli}** kadrosuna eklendi!\n"
-        f"İlk 11: {len(veri['oyuncular'])}/11"
-    ))
-
-
-@bot.command(name="takım-oyuncusil")
-async def takim_oyuncu_sil(ctx, oyuncu: discord.Member, *, takim_adi: str):
-    t = takim_adi.upper().strip()
-    gecerli = takim_adi_normalize(t)
-    if not gecerli:
-        return await ctx.send(embed=hata_embed("❌ Geçersiz takım adı!"))
-
-    anahtar = gecerli.upper()
-
-    if not (baskan_mi(ctx.author.id, anahtar) or ctx.author.guild_permissions.administrator):
-        return await ctx.send(embed=hata_embed("❌ Bu komutu kullanmak için **Başkan** olmalısın!"))
-
-    if anahtar not in takim_verileri:
-        return await ctx.send(embed=hata_embed("❌ Bu takımın kaydı yok!"))
-
-    veri = takim_verileri[anahtar]
-
-    for o in veri["oyuncular"]:
-        if o["id"] == oyuncu.id:
-            veri["oyuncular"].remove(o)
-            takim_verileri_kaydet(takim_verileri)
-            return await ctx.send(embed=basari_embed(
-                f"🗑️ **{oyuncu.display_name}** ilk 11'den çıkarıldı."
-            ))
-
-    for y in veri["yedekler"]:
-        if y["id"] == oyuncu.id:
-            veri["yedekler"].remove(y)
-            takim_verileri_kaydet(takim_verileri)
-            return await ctx.send(embed=basari_embed(
-                f"🗑️ **{oyuncu.display_name}** yedeklerden çıkarıldı."
-            ))
-
-    await ctx.send(embed=hata_embed(f"❌ {oyuncu.display_name} bu takımda bulunamadı!"))
-
-
-@bot.command(name="takım-dizilişseç")
-async def takim_dizilis_sec(ctx, dizilis: str, *, takim_adi: str):
-    t = takim_adi.upper().strip()
-    gecerli = takim_adi_normalize(t)
-    if not gecerli:
-        return await ctx.send(embed=hata_embed("❌ Geçersiz takım adı!"))
-
-    anahtar = gecerli.upper()
-
-    if not (baskan_mi(ctx.author.id, anahtar) or kaptan_mi(ctx.author.id, anahtar) or ctx.author.guild_permissions.administrator):
-        return await ctx.send(embed=hata_embed("❌ Bu komutu kullanmak için **Başkan** veya **Kaptan** olmalısın!"))
-
-    if dizilis not in DIZILIS_SEMALARI:
-        gecerli_dizilisler = "\n".join([f"• {d}" for d in DIZILIS_SEMALARI.keys()])
-        return await ctx.send(embed=hata_embed(f"❌ Geçersiz diziliş!\n\n**Geçerli Dizilişler:**\n{gecerli_dizilisler}"))
-
-    if anahtar not in takim_verileri:
-        takim_verileri[anahtar] = {"baskan_id": None, "kaptan_id": None, "oyuncular": [], "yedekler": [], "dizilis": None}
-
-    takim_verileri[anahtar]["dizilis"] = dizilis
-
-    schema = [m.upper() for m in DIZILIS_SEMALARI[dizilis]]
-    cikarilanlar = []
-    kalan = []
-    for o in takim_verileri[anahtar]["oyuncular"]:
-        if o["mevki"].upper() not in schema:
-            cikarilanlar.append(o)
-        else:
-            kalan.append(o)
-    takim_verileri[anahtar]["oyuncular"] = kalan
-    takim_verileri_kaydet(takim_verileri)
-
-    mesaj = f"📐 **{gecerli}** takımının dizilişi **{dizilis}** olarak ayarlandı!\n"
-    mesaj += f"Mevkiler: `{'`, `'.join(DIZILIS_SEMALARI[dizilis])}`"
-    if cikarilanlar:
-        mesaj += f"\n\n⚠️ Geçersiz mevkide **{len(cikarilanlar)}** oyuncu kadroya çıkarıldı (yeni dizilişle uyumsuz)."
-
-    await ctx.send(embed=basari_embed(mesaj))
-
-
-@bot.command(name="yedek-ekle")
-async def yedek_ekle(ctx, oyuncu: discord.Member, mevki: str, *, takim_adi: str):
-    t = takim_adi.upper().strip()
-    gecerli = takim_adi_normalize(t)
-    if not gecerli:
-        return await ctx.send(embed=hata_embed("❌ Geçersiz takım adı!"))
-
-    anahtar = gecerli.upper()
-
-    if not (baskan_mi(ctx.author.id, anahtar) or kaptan_mi(ctx.author.id, anahtar) or ctx.author.guild_permissions.administrator):
-        return await ctx.send(embed=hata_embed("❌ Bu komutu kullanmak için **Başkan** veya **Kaptan** olmalısın!"))
-
-    if anahtar not in takim_verileri:
-        takim_verileri[anahtar] = {"baskan_id": None, "kaptan_id": None, "oyuncular": [], "yedekler": [], "dizilis": None}
-
-    veri = takim_verileri[anahtar]
-    mevki_ust = mevki.upper()
-
-    if mevki_ust not in [m.upper() for m in MEVKI_LISTESI]:
-        return await ctx.send(embed=hata_embed(f"❌ Geçersiz mevki! Geçerli mevkiler: `{'`, `'.join(MEVKI_LISTESI)}`"))
-
-    for o in veri["oyuncular"]:
-        if o["id"] == oyuncu.id:
-            return await ctx.send(embed=hata_embed(f"❌ {oyuncu.display_name} zaten ilk 11'de!"))
-    for y in veri["yedekler"]:
-        if y["id"] == oyuncu.id:
-            return await ctx.send(embed=hata_embed(f"❌ {oyuncu.display_name} zaten yedekte!"))
-
-    tag = oyuncu.display_name
-    veri["yedekler"].append({"id": oyuncu.id, "tag": tag, "mevki": mevki_ust})
-    takim_verileri_kaydet(takim_verileri)
-
-    await ctx.send(embed=basari_embed(
-        f"🪑 **{oyuncu.display_name}** [{mevki_ust}] yedek kadrosuna eklendi! (**{gecerli}**)"
-    ))
-
-
-@bot.command(name="değişiklik-yap")
-async def degisiklik_yap(ctx, oyuncu1: discord.Member, oyuncu2: discord.Member, *, takim_adi: str):
-    t = takim_adi.upper().strip()
-    gecerli = takim_adi_normalize(t)
-    if not gecerli:
-        return await ctx.send(embed=hata_embed("❌ Geçersiz takım adı!"))
-
-    anahtar = gecerli.upper()
-
-    if not (baskan_mi(ctx.author.id, anahtar) or kaptan_mi(ctx.author.id, anahtar) or ctx.author.guild_permissions.administrator):
-        return await ctx.send(embed=hata_embed("❌ Bu komutu kullanmak için **Başkan** veya **Kaptan** olmalısın!"))
-
-    if anahtar not in takim_verileri:
-        return await ctx.send(embed=hata_embed("❌ Bu takımın kaydı yok!"))
-
-    veri = takim_verileri[anahtar]
-    dizilis = veri.get("dizilis")
-
-    o1_data = None
-    o2_data = None
-
-    for o in veri["oyuncular"]:
-        if o["id"] == oyuncu1.id:
-            o1_data = o
-            break
-
-    for y in veri["yedekler"]:
-        if y["id"] == oyuncu2.id:
-            o2_data = y
-            break
-
-    if not o1_data:
-        return await ctx.send(embed=hata_embed(f"❌ {oyuncu1.display_name} ilk 11'de değil!"))
-    if not o2_data:
-        return await ctx.send(embed=hata_embed(f"❌ {oyuncu2.display_name} yedekte değil!"))
-
-    if dizilis:
-        schema = [m.upper() for m in DIZILIS_SEMALARI.get(dizilis, [])]
-        if o2_data["mevki"].upper() not in schema:
-            return await ctx.send(embed=hata_embed(
-                f"❌ {oyuncu2.display_name}'in mevkisi (**{o2_data['mevki']}**) mevcut dizilişte (**{dizilis}**) yok!\n"
-                f"Bu dizilişin mevkileri: `{'`, `'.join(DIZILIS_SEMALARI.get(dizilis, []))}`"
-            ))
-
-    veri["oyuncular"].remove(o1_data)
-    veri["yedekler"].remove(o2_data)
-    veri["oyuncular"].append({"id": oyuncu2.id, "tag": oyuncu2.display_name, "mevki": o2_data["mevki"]})
-    veri["yedekler"].append({"id": oyuncu1.id, "tag": oyuncu1.display_name, "mevki": o1_data["mevki"]})
-    takim_verileri_kaydet(takim_verileri)
-
-    await ctx.send(embed=basari_embed(
-        f"🔄 **Değişiklik Yapıldı!**\n"
-        f"⬅️ Çıkan: **{oyuncu1.display_name}** [{o1_data['mevki']}]\n"
-        f"➡️ Giren: **{oyuncu2.display_name}** [{o2_data['mevki']}]"
-    ))
-
-
-@bot.command(name="başkanekle")
-async def baskan_ekle(ctx, takim_uye: discord.Member, baskan: discord.Member):
-    if not (ctx.author.guild_permissions.administrator or lig_commander_mi(ctx.author)):
-        return await ctx.send(embed=hata_embed("❌ Bu komutu kullanmak için **League Commander** veya **Admin** olmalısın!"))
-
-    display = takim_uye.display_name
-    parcalar = [p.strip() for p in display.split("|")]
-    takim_adi_nick = parcalar[-1] if len(parcalar) >= 3 else None
-
-    if not takim_adi_nick:
-        return await ctx.send(embed=hata_embed(
-            "❌ Takım üyesinin nickinde takım adı bulunamadı!\n"
-            "Format: Ad | Değer | TakımAdı"
-        ))
-
-    gecerli = takim_adi_normalize(takim_adi_nick)
-    if not gecerli:
-        gecerli = takim_adi_normalize(takim_adi_nick.upper())
-    
-    if not gecerli:
-        for t in GECERLI_TAKIMLAR:
-            if t.lower() in takim_adi_nick.lower() or takim_adi_nick.lower() in t.lower():
-                gecerli = t
-                break
-
-    if not gecerli:
-        return await ctx.send(embed=hata_embed(
-            f"❌ Nick'teki takım adı geçerli değil: **{takim_adi_nick}**\n"
-            f"Geçerli takımlar: {', '.join(GECERLI_TAKIMLAR)}"
-        ))
-
-    anahtar = gecerli.upper()
-    if anahtar not in takim_verileri:
-        takim_verileri[anahtar] = {"baskan_id": None, "kaptan_id": None, "oyuncular": [], "yedekler": [], "dizilis": None}
-
-    takim_verileri[anahtar]["baskan_id"] = baskan.id
-    takim_verileri_kaydet(takim_verileri)
-
-    await ctx.send(embed=basari_embed(
-        f"👑 **{baskan.display_name}**, **{gecerli}** takımının başkanı olarak atandı!"
-    ))
-
 
 # ====================== TAKIM BASKANI DROPDOWN ======================
 class TakimSecDropdown(ui.Select):
@@ -1471,63 +1022,6 @@ async def kayit(ctx, uye: discord.Member, *, bilgi: str):
     embed.set_footer(text="Aşağıdaki butonlardan birini seçin")
     view = KayitSecimView(hedef=uye, yeni_nick=yeni_nick, yapan=ctx.author)
     await ctx.send(embed=embed, view=view)
-
-
-# --- ANTRENMAN KOMUTU ---
-@bot.command(name="antrenman")
-async def antrenman(ctx):
-    if ANTRENMAN_KANAL_ID != 0 and ctx.channel.id != ANTRENMAN_KANAL_ID:
-        return await ctx.send("❌ Bu komutu sadece antrenman kanalında kullanabilirsin!")
-    uye = ctx.author
-    mevcut = antrenman_sayac.get(uye.id, 0) + 1
-    if mevcut > 10:
-        mevcut = 1
-    antrenman_sayac[uye.id] = mevcut
-    antrenman_kaydet(antrenman_sayac)
-
-    dolu = "🟩" * mevcut
-    bos = "⬜" * (10 - mevcut)
-    embed = discord.Embed(
-        title="🏋️ Antrenman",
-        description=f"{uye.mention} antrenman yapıyor!\n\n**{mevcut}/10**\n{dolu}{bos}",
-        color=0xF1C40F if mevcut < 10 else 0x2ECC71
-    )
-    if mevcut < 10:
-        embed.set_footer(text=f"{10 - mevcut} antrenman daha kaldı!")
-        await ctx.send(embed=embed)
-    else:
-        embed.set_footer(text="✅ Antrenman tamamlandı! +3M ekleniyor...")
-        await ctx.send(embed=embed)
-        try:
-            uye = await ctx.guild.fetch_member(ctx.author.id)
-        except Exception:
-            uye = ctx.author
-        guncel_isim = uye.nick if uye.nick else uye.name
-        yeni_isim, eski_d, yeni_d = antrenman_deger_ekle(guncel_isim, 3)
-        if yeni_isim is not None:
-            try:
-                await uye.edit(nick=yeni_isim)
-                await ctx.send(embed=basari_embed(
-                    f"💰 {uye.mention} antrenman ödülü aldı: **+3M**\n"
-                    f"📊 Değer: {eski_d} → {yeni_d}\n"
-                    f"📝 Yeni isim: {yeni_isim}"
-                ))
-                await log_deger_gonder(
-                    ctx.guild, ctx.author, uye, eski_d, yeni_d,
-                    "🏋️ Antrenman Tamamlandı (+3M)", "Antrenman ödülü verildi"
-                )
-            except (discord.Forbidden, discord.HTTPException):
-                await ctx.send(embed=basari_embed(
-                    f"💰 {uye.mention} antrenman ödülü: **+3M** kazandı!\n"
-                    f"📊 Değer: {eski_d} → {yeni_d}\n"
-                    f"⚠️ İsim güncellenemedi, manuel güncelle: {yeni_isim}"
-                ))
-        else:
-            await ctx.send(embed=hata_embed(
-                f"{uye.mention} 10/10 tamamladı fakat isim formatı hatalı!"
-            ))
-        antrenman_sayac[uye.id] = 0
-        antrenman_kaydet(antrenman_sayac)
 
 
 # ====================== KAP SİSTEMİ ======================
@@ -2454,7 +1948,6 @@ async def baslat_vampir_oyunu(ctx):
                 await uye.send(embed=dm)
             else:
                 dm = discord.Embed(title="🛡️ ROLÜN: KÖYLÜ", color=0x3498DB)
-                dm.description = "Vampiri"
                 dm.description = "Vampiri bul, köyü kurtar!"
                 await uye.send(embed=dm)
         except discord.Forbidden:
@@ -2687,6 +2180,11 @@ async def ytstat(ctx):
 @bot.command()
 async def m(ctx):
     sayi = mesaj_sayaci.get(ctx.author.id, 0)
+    await ctx.send(f"📝 {ctx.author.mention} toplam **{
+
+@bot.command()
+async def m(ctx):
+    sayi = mesaj_sayaci.get(ctx.author.id, 0)
     await ctx.send(f"📝 {ctx.author.mention} toplam **{sayi}** mesaj yazdı!")
 
 
@@ -2829,9 +2327,8 @@ class YardimDropDown(ui.Select):
         options = [
             discord.SelectOption(label="🛡️ Moderasyon", description="Ban, Kick, Mute, Unmute, Nuke..."),
             discord.SelectOption(label="🎭 Rol Yönetimi", description="Rol Ver, Rol Al, Toplu Rol..."),
-            discord.SelectOption(label="🎬 Roleplay", description="Kayıt, Değer, Antrenman komutları."),
+            discord.SelectOption(label="🎬 Roleplay", description="Kayıt, Değer komutları."),
             discord.SelectOption(label="⚽ Kariyer Sistemi", description="Kariyer, Gol, Asist komutları."),
-            discord.SelectOption(label="🏟️ Takım Sistemi", description="Takım kadro, diziliş komutları."),
             discord.SelectOption(label="📢 NOVA KAP", description="Transfer, Kiralama, Yenileme, FESH"),
             discord.SelectOption(label="🎉 Etkinlik", description="Etkinlik, Çark, Bilgi, Eşleştir, VK..."),
             discord.SelectOption(label="🌍 Genel & Eğlence", description="Ping, Avatar, Snipe, AFK, Hikaye..."),
@@ -2863,8 +2360,7 @@ class YardimDropDown(ui.Select):
             embed.description = (
                 "**.k @üye [İsim | Değer | Takım]** - Kayıt yapar.\n"
                 "**.dver @üye [miktar] [sebep]** - Değer ekler.\n"
-                "**.dsil @üye [miktar] [sebep]** - Değer siler.\n"
-                "**.antrenman** - Antrenman yapar, 10/10'da +3M."
+                "**.dsil @üye [miktar] [sebep]** - Değer siler."
             )
         elif self.values[0] == "⚽ Kariyer Sistemi":
             embed.description = (
@@ -2872,19 +2368,6 @@ class YardimDropDown(ui.Select):
                 "**.golekle @üye [miktar]** - Gol ekler. **(League Commander)**\n"
                 "**.asistekle @üye [miktar]** - Asist ekler. **(League Commander)**\n"
                 "**.takimekle @üye [takım]** - Kariyer geçmişine takım ekler."
-            )
-        elif self.values[0] == "🏟️ Takım Sistemi":
-            gecerli = "\n".join([f"• {t}" for t in GECERLI_TAKIMLAR])
-            embed.description = (
-                "**.takım [TakımAdı]** — Kadroyu göster (Herkes)\n"
-                "**.takım-oyuncuekle @oyuncu [mevki] [TakımAdı]** — Oyuncu ekle *(Başkan/Kaptan)*\n"
-                "**.takım-oyuncusil @oyuncu [TakımAdı]** — Oyuncu sil *(Sadece Başkan)*\n"
-                "**.takım-dizilişseç [diziliş] [TakımAdı]** — Diziliş seç *(Başkan/Kaptan)*\n"
-                "**.yedek-ekle @oyuncu [mevki] [TakımAdı]** — Yedek ekle *(Başkan/Kaptan)*\n"
-                "**.değişiklik-yap @ilk11oyuncu @yedekoyuncu [TakımAdı]** — Değişiklik *(Başkan/Kaptan)*\n"
-                "**.başkanekle @takımtag @başkan** — Başkan ata *(League Commander)*\n\n"
-                f"**Geçerli Dizilişler:** {', '.join(DIZILIS_SEMALARI.keys())}\n\n"
-                f"**Geçerli Takımlar:**\n{gecerli}"
             )
         elif self.values[0] == "📢 NOVA KAP":
             takim_listesi = "\n".join([f"• {t}" for t in TAKIM_ROLLERI.keys()])
