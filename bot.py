@@ -2221,7 +2221,7 @@ async def ytstat(ctx):
 
 
 @bot.command()
-async def m(ctx):
+async def mesaj_say(ctx):
     sayi = mesaj_sayaci.get(ctx.author.id, 0)
     await ctx.send(f"📝 {ctx.author.mention} toplam **{sayi}** mesaj yazdı!")
 
@@ -2284,6 +2284,7 @@ async def dm(ctx, uye: discord.Member, *, mesaj: str):
     except:
         await ctx.send(f"❌ {uye.mention} kişisine mesaj gönderilemedi!")
 
+@bot.command(aliases=['m']) # Əgər başqa komandada bu varsa, "m" artıq məşğuldur.
 
 @bot.command()
 async def pen(ctx):
