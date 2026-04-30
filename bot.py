@@ -1658,6 +1658,49 @@ async def eslestir(ctx):
     embed.add_field(name="💬 Yorum", value=yorum, inline=False)
     await ctx.send(embed=embed)
 
+# ====================== PENALTI ANTRenMAN KOMUTU ======================
+PENALTI_KANAL_ID = 1499363897553977394  # Buraya kendi Penaltı antrenman kanal ID'ni yazacaksın
+
+@bot.command(name="pen")
+async def pen(ctx):
+    if ctx.channel.id != PENALTI_KANAL_ID:
+        return await ctx.send(embed=hata_embed("❌ Bu komut sadece **Penaltı Antrenman** kanalında kullanılabilir!"))
+    
+    sonuc = random.choices(
+        ["gol", "kaleci", "aut"],
+        weights=[1, 1, 1],  # Eşit oran (33.33%)
+        k=1
+    )[0]
+
+    if sonuc == "gol":
+        embed = discord.Embed(
+            title="⚽ GOL OLDU!",
+            description=f"**{ctx.author.mention}** harika bir penaltı vuruşu yaptı!\n\n"
+                        f"🥅 **Top ağlarla buluştu!** 🔥",
+            color=0x00ff00
+        )
+        embed.set_footer(text="Mükemmel vuruş!")
+
+    elif sonuc == "kaleci":
+        embed = discord.Embed(
+            title="🧤 KALECİ KURTARDI!",
+            description=f"**{ctx.author.mention}** penaltıyı vurdu ama...\n\n"
+                        f"🧤 **Kaleci muhteşem bir kurtarış yaptı!**",
+            color=0xffaa00
+        )
+        embed.set_footer(text="Kaleci bugün formda!")
+
+    else:  # aut
+        embed = discord.Embed(
+            title="📍 AUT!",
+            description=f"**{ctx.author.mention}** penaltı vuruşunda topu dışarıya gönderdi!\n\n"
+                        f"😅 **Maalesef aut oldu...**",
+            color=0xff0000
+        )
+        embed.set_footer(text="Bir dahaki sefere daha iyi olacak!")
+
+    await ctx.send(embed=embed)
+
 
 # ====================== HİKAYE KOMUTU ======================
 hikaye_bekleyen = {}
@@ -2180,7 +2223,7 @@ async def ytstat(ctx):
 @bot.command()
 async def m(ctx):
     sayi = mesaj_sayaci.get(ctx.author.id, 0)
-    await ctx.send(f"📝 {ctx.author.mention} toplam **{
+    await ctx.send(f"📝 {ctx.author.mention} toplam **{sayi}** mesaj yazdı!")
 
 @bot.command()
 async def m(ctx):
