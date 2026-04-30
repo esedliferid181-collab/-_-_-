@@ -2269,8 +2269,11 @@ async def dm(ctx, uye: discord.Member, *, mesaj: str):
     except:
         await ctx.send(f"❌ {uye.mention} kişisine mesaj gönderilemedi!")
 
-@bot.command(aliases=['m']) # Əgər başqa komandada bu varsa, "m" artıq məşğuldur.
-
+@bot.command(name="mesaj_say", aliases=['m'])
+async def mesaj_say(ctx):
+    sayi = mesaj_sayaci.get(ctx.author.id, 0)
+    await ctx.send(f"📝 {ctx.author.mention} toplam **{sayi}** mesaj yazdı!")
+    
 @bot.command()
 async def up(ctx, uye: discord.Member):
     if ctx.author.id not in [ctx.guild.owner_id, 1290738144609828877]:
