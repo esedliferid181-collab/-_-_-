@@ -2225,10 +2225,7 @@ async def m(ctx):
     sayi = mesaj_sayaci.get(ctx.author.id, 0)
     await ctx.send(f"📝 {ctx.author.mention} toplam **{sayi}** mesaj yazdı!")
 
-@bot.command()
-async def m(ctx):
-    sayi = mesaj_sayaci.get(ctx.author.id, 0)
-    await ctx.send(f"📝 {ctx.author.mention} toplam **{sayi}** mesaj yazdı!")
+
 
 
 @bot.command()
