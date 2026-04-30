@@ -1658,50 +1658,35 @@ async def eslestir(ctx):
     embed.add_field(name="💬 Yorum", value=yorum, inline=False)
     await ctx.send(embed=embed)
 
-# ====================== PENALTI ANTRenMAN KOMUTU ======================
-PENALTI_KANAL_ID = 1499363897553977394  # Buraya kendi Penaltı antrenman kanal ID'ni yazacaksın
-
+# ====================== PENALTI ANTRenMAN KOMUTU (BİRLƏŞDİRİLMİŞ) ======================
+PENALTI_KANAL_ID = 1499363897553977394  # Kanal idsini buraya yazin
 @bot.command(name="pen")
 async def pen(ctx):
+    # 1. ADDIM: Once kanalin dogru olup olmadigini deniyoruz
     if ctx.channel.id != PENALTI_KANAL_ID:
         return await ctx.send(embed=hata_embed("❌ Bu komut sadece **Penaltı Antrenman** kanalında kullanılabilir!"))
+
+    # 2. ADDIM: Eger kanal dogrudursa, oyunun mantikini yapiyoruz
+    son = son_cark_sonucu.get(f"pen_{ctx.author.id}", -1)
+    kullanilabilir = [i for i in range(3) if i != son]
+    secim_index = random.choice(kullanilabilir)
+    son_cark_sonucu[f"pen_{ctx.author.id}"] = secim_index
     
-    sonuc = random.choices(
-        ["gol", "kaleci", "aut"],
-        weights=[1, 1, 1],  # Eşit oran (33.33%)
-        k=1
-    )[0]
-
-    if sonuc == "gol":
-        embed = discord.Embed(
-            title="⚽ GOL OLDU!",
-            description=f"**{ctx.author.mention}** harika bir penaltı vuruşu yaptı!\n\n"
-                        f"🥅 **Top ağlarla buluştu!** 🔥",
-            color=0x00ff00
-        )
-        embed.set_footer(text="Mükemmel vuruş!")
-
-    elif sonuc == "kaleci":
-        embed = discord.Embed(
-            title="🧤 KALECİ KURTARDI!",
-            description=f"**{ctx.author.mention}** penaltıyı vurdu ama...\n\n"
-                        f"🧤 **Kaleci muhteşem bir kurtarış yaptı!**",
-            color=0xffaa00
-        )
-        embed.set_footer(text="Kaleci bugün formda!")
-
-    else:  # aut
-        embed = discord.Embed(
-            title="📍 AUT!",
-            description=f"**{ctx.author.mention}** penaltı vuruşunda topu dışarıya gönderdi!\n\n"
-                        f"😅 **Maalesef aut oldu...**",
-            color=0xff0000
-        )
-        embed.set_footer(text="Bir dahaki sefere daha iyi olacak!")
-
+    sonuclar = ["GOL ⚽", "KALECİ ÇIKTI 🧤", "AUT ❌"]
+    sozler = {
+        "GOL ⚽": ["Muhteşem vuruş!", "Ağları salladı!", "Köşeye yerleştirdi!"],
+        "KALECİ ÇIKTI 🧤": ["Rüya gibi kurtarış!", "Kaleci şov yaptı!", "Demir gibi eller!"],
+        "AUT ❌": ["Çok az fark!", "Direkten döndü!", "Ah be, yanından geçti!"]
+    }
+    
+    sonuc = sonuclar[secim_index]
+    soz = random.choice(sozler[sonuc])
+    renk = 0x2ECC71 if "GOL" in sonuc else (0xFFA500 if "KALECİ" in sonuc else 0xE74C3C)
+    
+    embed = discord.Embed(title=sonuc, description=f"*{soz}*", color=renk)
+    embed.set_footer(text=f"Penaltı atan: {ctx.author.name}")
+    
     await ctx.send(embed=embed)
-
-
 # ====================== HİKAYE KOMUTU ======================
 hikaye_bekleyen = {}
 
@@ -2285,26 +2270,6 @@ async def dm(ctx, uye: discord.Member, *, mesaj: str):
         await ctx.send(f"❌ {uye.mention} kişisine mesaj gönderilemedi!")
 
 @bot.command(aliases=['m']) # Əgər başqa komandada bu varsa, "m" artıq məşğuldur.
-
-@bot.command()
-async def pen(ctx):
-    son = son_cark_sonucu.get(f"pen_{ctx.author.id}", -1)
-    kullanilabilir = [i for i in range(3) if i != son]
-    secim_index = random.choice(kullanilabilir)
-    son_cark_sonucu[f"pen_{ctx.author.id}"] = secim_index
-    sonuclar = ["GOL ⚽", "KALECİ ÇIKTI 🧤", "AUT ❌"]
-    sozler = {
-        "GOL ⚽": ["Muhteşem vuruş!", "Ağları salladı!", "Köşeye yerleştirdi!"],
-        "KALECİ ÇIKTI 🧤": ["Rüya gibi kurtarış!", "Kaleci şov yaptı!", "Demir gibi eller!"],
-        "AUT ❌": ["Çok az fark!", "Direkten döndü!", "Ah be, yanından geçti!"]
-    }
-    sonuc = sonuclar[secim_index]
-    soz = random.choice(sozler[sonuc])
-    renk = 0x2ECC71 if "GOL" in sonuc else (0xFFA500 if "KALECİ" in sonuc else 0xE74C3C)
-    embed = discord.Embed(title=sonuc, description=f"*{soz}*", color=renk)
-    embed.set_footer(text=f"Penaltı atan: {ctx.author.name}")
-    await ctx.send(embed=embed)
-
 
 @bot.command()
 async def up(ctx, uye: discord.Member):
