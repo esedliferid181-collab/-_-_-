@@ -1,7 +1,3 @@
-
-bash
-
-cat > /home/claude/bot.py << 'ENDOFFILE'
 import discord
 from discord.ext import commands
 from discord import ui
@@ -2433,4 +2429,3 @@ if not TOKEN:
     print("❌ HATA: DISCORD_TOKEN bulunamadı!")
 else:
     bot.run(TOKEN)
-ENDOFFILE
