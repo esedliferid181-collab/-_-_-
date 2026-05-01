@@ -6,6 +6,8 @@ import asyncio
 import random
 import os
 import json
+from flask import Flask
+from threading import Thread
 
 # --- AYARLAR ---
 TOKEN = os.environ.get("DISCORD_TOKEN")
@@ -2424,8 +2426,24 @@ async def yardım(ctx):
     await ctx.send(embed=embed, view=view)
 
 
+# ====================== WEB SERVER (HOSTING İÇİN) ======================
+app = Flask('')
+
+@app.route('/')
+def home():
+    return "NOVA PLUS Botu işliyor! ✅"
+
+def run():
+    port = int(os.environ.get('PORT', 8080))
+    app.run(host='0.0.0.0', port=port)
+
+def keep_alive():
+    t = Thread(target=run)
+    t.start()
+
 # ====================== BOT ÇALIŞTIR ======================
 if not TOKEN:
     print("❌ HATA: DISCORD_TOKEN bulunamadı!")
 else:
+    keep_alive()  
     bot.run(TOKEN)
