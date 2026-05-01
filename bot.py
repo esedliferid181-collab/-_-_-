@@ -1,3 +1,7 @@
+
+bash
+
+cat > /home/claude/bot.py << 'ENDOFFILE'
 import discord
 from discord.ext import commands
 from discord import ui
@@ -34,7 +38,7 @@ VK_YETKILI_IDS = [1135886736807964713]
 # ====================== TAKIM ROL ID'LERİ ======================
 TAKIM_ROLLERI = {
     "FC Barcelona": 1499363299538636840,
-    "Real Madrid CF": 1499363299538636840 ,
+    "Real Madrid CF": 1499363299538636840,
     "ATLETİCO MADRİD": 1499363322594594956,
     "LİVERPOOL": 1499363306513764402,
     "MANCHESTER CİTY": 1499363301950226572,
@@ -447,7 +451,6 @@ async def nuke(ctx):
 @bot.command(name="kayıtsızherkes")
 @commands.has_permissions(administrator=True)
 async def kayitsiz_herkes(ctx):
-    """Botlar ve sunucu sahibi dışındaki herkesin tüm rollerini silip Kayıtsız rolü verir."""
     kayitsiz_rol = discord.utils.get(ctx.guild.roles, name=KAYITSIZ_ROL)
     if not kayitsiz_rol:
         return await ctx.send(embed=hata_embed(
@@ -455,7 +458,6 @@ async def kayitsiz_herkes(ctx):
         ))
 
     owner_id = ctx.guild.owner_id
-    bot_id = bot.user.id
 
     hedefler = [
         m for m in ctx.guild.members
@@ -1455,7 +1457,7 @@ BILGI_SORULARI = [
     ("Messi kaç kez Ballon d'Or kazandı?", "8", "🌟 Rekor 8 kez!"),
     ("2022 Dünya Kupası'nı hangi takım kazandı?", "arjantin", "🇦🇷 Arjantin!"),
     ("Türkiye Milli Takımı hangi Dünya Kupası'nda 3. oldu?", "2002", "🇹🇷 2002 Güney Kore-Japonya!"),
-    ("Hakan Şükür'ün Dünya Kupası tarihindeki en hızlı golü kaç saniyediydi?", "11", "⚡ 11 saniye!"),
+    ("Hakan Şükür'ün Dünya Kupası tarihindeki en hızlı golü kaç saniyedeydi?", "11", "⚡ 11 saniye!"),
     ("Süper Lig'in ilk şampiyonu kimdir?", "fenerbahce", "🟡🔵 Fenerbahçe!"),
     ("Serie A'yı en fazla kazanan takım hangisidir?", "juventus", "⚫⚪ Juventus!"),
     ("La Liga'yı en fazla kazanan takım hangisidir?", "real madrid", "👑 Real Madrid!"),
@@ -1658,35 +1660,34 @@ async def eslestir(ctx):
     embed.add_field(name="💬 Yorum", value=yorum, inline=False)
     await ctx.send(embed=embed)
 
-# ====================== PENALTI ANTRenMAN KOMUTU (BİRLƏŞDİRİLMİŞ) ======================
-PENALTI_KANAL_ID = 1499363897553977394  # Kanal idsini buraya yazin
+# ====================== PENALTI ANTRENMAN KOMUTU ======================
+PENALTI_KANAL_ID = 1499363897553977394
+
 @bot.command(name="pen")
 async def pen(ctx):
-    # 1. ADDIM: Once kanalin dogru olup olmadigini deniyoruz
     if ctx.channel.id != PENALTI_KANAL_ID:
         return await ctx.send(embed=hata_embed("❌ Bu komut sadece **Penaltı Antrenman** kanalında kullanılabilir!"))
 
-    # 2. ADDIM: Eger kanal dogrudursa, oyunun mantikini yapiyoruz
     son = son_cark_sonucu.get(f"pen_{ctx.author.id}", -1)
     kullanilabilir = [i for i in range(3) if i != son]
     secim_index = random.choice(kullanilabilir)
     son_cark_sonucu[f"pen_{ctx.author.id}"] = secim_index
-    
+
     sonuclar = ["GOL ⚽", "KALECİ ÇIKTI 🧤", "AUT ❌"]
     sozler = {
         "GOL ⚽": ["Muhteşem vuruş!", "Ağları salladı!", "Köşeye yerleştirdi!"],
         "KALECİ ÇIKTI 🧤": ["Rüya gibi kurtarış!", "Kaleci şov yaptı!", "Demir gibi eller!"],
         "AUT ❌": ["Çok az fark!", "Direkten döndü!", "Ah be, yanından geçti!"]
     }
-    
+
     sonuc = sonuclar[secim_index]
     soz = random.choice(sozler[sonuc])
     renk = 0x2ECC71 if "GOL" in sonuc else (0xFFA500 if "KALECİ" in sonuc else 0xE74C3C)
-    
+
     embed = discord.Embed(title=sonuc, description=f"*{soz}*", color=renk)
     embed.set_footer(text=f"Penaltı atan: {ctx.author.name}")
-    
     await ctx.send(embed=embed)
+
 # ====================== HİKAYE KOMUTU ======================
 hikaye_bekleyen = {}
 
@@ -2205,12 +2206,10 @@ async def ytstat(ctx):
     await ctx.send(embed=embed)
 
 
-@bot.command()
+@bot.command(name="m", aliases=["mesaj_say"])
 async def mesaj_say(ctx):
     sayi = mesaj_sayaci.get(ctx.author.id, 0)
     await ctx.send(f"📝 {ctx.author.mention} toplam **{sayi}** mesaj yazdı!")
-
-
 
 
 @bot.command()
@@ -2269,11 +2268,7 @@ async def dm(ctx, uye: discord.Member, *, mesaj: str):
     except:
         await ctx.send(f"❌ {uye.mention} kişisine mesaj gönderilemedi!")
 
-@bot.command(name="mesaj_say", aliases=['m'])
-async def mesaj_say(ctx):
-    sayi = mesaj_sayaci.get(ctx.author.id, 0)
-    await ctx.send(f"📝 {ctx.author.mention} toplam **{sayi}** mesaj yazdı!")
-    
+
 @bot.command()
 async def up(ctx, uye: discord.Member):
     if ctx.author.id not in [ctx.guild.owner_id, 1290738144609828877]:
@@ -2438,3 +2433,4 @@ if not TOKEN:
     print("❌ HATA: DISCORD_TOKEN bulunamadı!")
 else:
     bot.run(TOKEN)
+ENDOFFILE
